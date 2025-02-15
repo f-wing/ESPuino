@@ -805,6 +805,11 @@ void AudioPlayer_Task(void *parameter) {
 				} else {
 					audioReturnCode = audio->connecttoFS(gFSystem, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
 					// consider track as finished, when audio lib call was not successful
+					if(NewRFIDPresented){
+						NewRFIDPresented = false;
+						audio->pauseResume();
+						gPlayProperties.pausePlay = true;
+					}
 				}
 			}
 
