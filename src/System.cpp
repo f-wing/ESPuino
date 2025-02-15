@@ -15,6 +15,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "ES8388.h"
 
 #include <esp_random.h>
 
@@ -34,6 +35,8 @@ uint8_t System_SleepTimer = 30u; // Sleep timer in minutes that can be optionall
 
 // Operation Mode
 volatile uint8_t System_OperationMode;
+
+ES8388 es8388_2;
 
 void System_SleepHandler(void);
 void System_DeepSleepManager(void);
@@ -148,6 +151,18 @@ void System_SetOperationMode(uint8_t opMode) {
 	uint8_t currentOperationMode = gPrefsSettings.getUChar("operationMode", OPMODE_NORMAL);
 	if (currentOperationMode != opMode) {
 		if (gPrefsSettings.putUChar("operationMode", opMode)) {
+			AudioPlayer_Exit();
+			// Disable amps in order to avoid ugly noises when powering off
+			#ifdef GPIO_PA_EN
+				Log_Println("shutdown amplifier..", LOGLEVEL_NOTICE);
+				Port_Write(GPIO_PA_EN, false, false);
+			#endif
+			#ifdef GPIO_HP_EN
+				Log_Println("shutdown headphone..", LOGLEVEL_NOTICE);
+				Port_Write(GPIO_HP_EN, false, false);
+			#endif
+
+			es8388_2.power_down(); 
 			ESP.restart();
 		}
 	}
@@ -189,6 +204,8 @@ void System_PreparePowerDown(void) {
 	Log_Println("shutdown headphone..", LOGLEVEL_NOTICE);
 	Port_Write(GPIO_HP_EN, false, false);
 #endif
+
+	es8388_2.power_down(); 
 
 	Mqtt_Exit();
 	Led_Exit();

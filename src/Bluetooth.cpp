@@ -271,6 +271,14 @@ void Bluetooth_PlayPauseTrack(void) {
 #endif
 }
 
+void Bluetooth_PauseTrack(void) {
+#ifdef BLUETOOTH_ENABLE
+	if ((System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) && (a2dp_sink)) {
+		a2dp_sink->pause();
+	}
+#endif 
+} 
+
 void Bluetooth_NextTrack(void) {
 #ifdef BLUETOOTH_ENABLE
 	if ((System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) && (a2dp_sink)) {

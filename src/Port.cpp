@@ -287,6 +287,15 @@ void Port_MakeSomeChannelsOutputForShutdown(void) {
 	}
 	#endif
 
+	#ifdef MIC_DETECT
+	if (MIC_DETECT >= 100 && MIC_DETECT <= 107) {
+		OutputBitMaskInOutAsPerPort[0] &= ~(1 << Port_ChannelToBit(MIC_DETECT));
+	} else if (MIC_DETECT >= 108 && MIC_DETECT <= 115) {
+		OutputBitMaskInOutAsPerPort[1] &= ~(1 << Port_ChannelToBit(MIC_DETECT));
+	}
+	#endif
+
+
 	#ifdef GPIO_HP_EN
 	if (GPIO_HP_EN >= 100 && GPIO_HP_EN <= 107) {
 		OutputBitMaskInOutAsPerPort[0] &= ~(1 << Port_ChannelToBit(GPIO_HP_EN));

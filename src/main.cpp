@@ -27,11 +27,14 @@
 #include "Web.h"
 #include "Wlan.h"
 #include "revision.h"
+#include "ES8388.h"
 
 #include <Wire.h>
 
 bool gPlayLastRfIdWhenWiFiConnected = false;
 bool gTriedToConnectToHost = false;
+
+bool NewRFIDPresented = false;
 
 static constexpr const char *logo = R"literal(
  _____   ____    ____            _
@@ -152,6 +155,27 @@ void setup() {
 	Power_Init();
 
 	Battery_Init();
+
+	// Init ES8388
+ 	ES8388 es8388;
+
+	Serial.println("Read Reg ES8388 : ");
+	if (!es8388.init()) Log_Println("ES8388 Init Failed!", LOGLEVEL_ERROR);;
+	es8388.inputSelect(IN1); // always keep microphone input active
+	es8388.setInputGain(0);
+	es8388.setALCmode(VOICE);
+	es8388.outputSelect(OUTALL);
+	es8388.setOutputVolume(30);//i.e. -24dB gain to compensate PAM8302A gain of 23.5dB
+	es8388.mixerSourceSelect(MIXADC, MIXADC);
+	//	es8388.mixerSourceControl(MIXALL); done in AudioPlayer_Init()
+	
+	// only for debugging purposes
+	uint8_t *reg;
+	for (uint8_t i = 0; i < 53; i++) {
+		//reg = es8388.readAllReg();
+		//Serial.printf("Reg-%02d = 0x%02x\r\n", i, reg[i]);
+		//Log_Printf(LOGLEVEL_NOTICE, "Reg-%02d = 0x%02x\r", i, reg[i]);
+	} 
 
 	// Init audio before power on to avoid speaker noise
 	AudioPlayer_Init();

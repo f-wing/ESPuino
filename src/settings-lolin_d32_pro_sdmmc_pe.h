@@ -50,13 +50,14 @@
     #endif
 
     // I2S (DAC)
+    #define I2S_MCLK                         0          // MCLK (IS2) set to GPIO0
     #define I2S_DOUT                        25          // Digital out (I2S)
     #define I2S_BCLK                        27          // BCLK (I2S)
     #define I2S_LRC                         26          // LRC (I2S)
 
     // Rotary encoder
     #ifdef USEROTARY_ENABLE
-        //#define REVERSE_ROTARY                        // To reverse encoder's direction; switching CLK / DT in hardware does the same
+        #define REVERSE_ROTARY                        // To reverse encoder's direction; switching CLK / DT in hardware does the same
         #define ROTARYENCODER_CLK           34          // rotary encoder's CLK
         #define ROTARYENCODER_DT            39          // 39 = 'VN'; rotary encoder's DT
     #endif
@@ -102,15 +103,18 @@
 
     // (optinal) Headphone-detection
     #ifdef HEADPHONE_ADJUST_ENABLE
-        //#define DETECT_HP_ON_HIGH                      // Per default headphones are supposed to be connected if HT_DETECT is LOW. DETECT_HP_ON_HIGH will change this behaviour to HIGH.
+        #define DETECT_HP_ON_HIGH                      // Per default headphones are supposed to be connected if HT_DETECT is LOW. DETECT_HP_ON_HIGH will change this behaviour to HIGH.
         #define HP_DETECT                   107          // GPIO that detects, if there's a plug in the headphone jack or not; connected to port-expander
     #endif
+
+    // Microphone detection
+    #define MIC_DETECT                      111            // high if microphone is connected
 
     // (optional) Monitoring of battery-voltage via ADC
     #ifdef MEASURE_BATTERY_VOLTAGE
         #define VOLTAGE_READ_PIN            35          // GPIO used to monitor battery-voltage. Don't change, it's built in
         constexpr float referenceVoltage = 3.30;        // Voltage between 3.3V and GND-pin at the develboard in battery-mode (disconnect USB!)
-        constexpr float offsetVoltage = 0.1;            // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
+        constexpr float offsetVoltage = 0.34;            // If voltage measured by ESP isn't 100% accurate, you can add an correction-value here
     #endif
 
     // (optional) For measuring battery-voltage a voltage-divider is already onboard. Connect a LiPo and use it!

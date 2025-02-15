@@ -14,6 +14,7 @@
 #define PREVIOUSTRACK 5 // Previous track of playlist
 #define FIRSTTRACK	  6 // First track of playlist
 #define LASTTRACK	  7 // Last track of playlist
+#define PAUSE         8 // Pause
 
 // Playmodes
 #define NO_PLAYLIST												  0 // If no playlist is active
@@ -67,6 +68,7 @@
 #define CMD_SEEK_BACKWARDS 181 // Command: jump backwards (time period to jump (in seconds) is configured via settings.h: jumpOffset)
 #define CMD_STOP		   182 // Command: stops playback
 #define CMD_RESTARTSYSTEM  183 // Command: restart System
+#define CMD_PAUSE          184 // Command: pause
 
 #define CMD_VIRTUAL_RFID_CARD_01 241 // Command: Virtual RFID-Card 900000000001
 #define CMD_VIRTUAL_RFID_CARD_02 242 // Command: Virtual RFID-Card 900000000002

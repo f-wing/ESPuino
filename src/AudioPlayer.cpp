@@ -26,6 +26,7 @@
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
 #include <random>
+#include "ES8388.h"
 
 #define AUDIOPLAYER_VOLUME_MAX	21u
 #define AUDIOPLAYER_VOLUME_MIN	0u
@@ -56,14 +57,22 @@ time_t playTimeSecSinceStart = 0;
 // current station logo url
 static String AudioPlayer_StationLogoUrl;
 
+extern bool NewRFIDPresented;
+
 #ifdef HEADPHONE_ADJUST_ENABLE
 static bool AudioPlayer_HeadphoneLastDetectionState;
 static uint32_t AudioPlayer_HeadphoneLastDetectionTimestamp = 0u;
 static uint8_t AudioPlayer_MaxVolumeHeadphone = 11u; // Maximum volume that can be adjusted in headphone-mode (default; can be changed later via GUI)
 #endif
 
+ES8388 es8388;
+
+static bool AudioPlayer_MicrophoneLastDetectionState;
+static uint32_t AudioPlayer_MicrophoneLastDetectionTimestamp = 0u;
+
 static void AudioPlayer_Task(void *parameter);
 static void AudioPlayer_HeadphoneVolumeManager(void);
+static void AudioPlayer_MicrophoneMixingManager(void);
 static std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
 static bool AudioPlayer_ArrSortHelper_strcmp(const char *a, const char *b);
 static bool AudioPlayer_ArrSortHelper_strnatcmp(const char *a, const char *b);
@@ -129,6 +138,19 @@ void AudioPlayer_Init(void) {
 		Log_Println(wroteMaxLoudnessForHeadphoneToNvs, LOGLEVEL_ERROR);
 	}
 #endif
+
+	// Initial setup of microphone detection
+	#if (MIC_DETECT >= 0 && MIC_DETECT <= MAX_GPIO)
+	pinMode(MIC_DETECT, INPUT_PULLUP);
+	#endif
+
+	AudioPlayer_MicrophoneLastDetectionState = Port_Read(MIC_DETECT);
+	if(AudioPlayer_MicrophoneLastDetectionState == 1){ //mirophone connected
+		es8388.mixerSourceControl(MIXALL);
+	} else { //microphone missing
+		es8388.mixerSourceControl(DACOUT);
+	}
+
 	// Adjust volume depending on headphone is connected and volume-adjustment is enabled
 	AudioPlayer_SetupVolumeAndAmps();
 
@@ -176,6 +198,7 @@ static uint32_t lastPlayingTimestamp = 0;
 
 void AudioPlayer_Cyclic(void) {
 	AudioPlayer_HeadphoneVolumeManager();
+	AudioPlayer_MicrophoneMixingManager();
 	if ((millis() - lastPlayingTimestamp >= 1000) && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != BUSY && !gPlayProperties.pausePlay) {
 		// audio is playing, update the playtime since start
 		lastPlayingTimestamp = millis();
@@ -365,6 +388,19 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 #endif
 }
 
+void AudioPlayer_MicrophoneMixingManager(void){
+	bool currentMicrophoneDetectionState = Port_Read(MIC_DETECT);
+	if (AudioPlayer_MicrophoneLastDetectionState != currentMicrophoneDetectionState && (millis() - AudioPlayer_MicrophoneLastDetectionTimestamp >= microphoneLastDetectionDebounce)) {
+		if(currentMicrophoneDetectionState == 1){ //mirophone connected
+			es8388.mixerSourceControl(MIXALL);
+		} else { //microphone missing
+			es8388.mixerSourceControl(DACOUT);
+		}
+		AudioPlayer_MicrophoneLastDetectionState = currentMicrophoneDetectionState;
+		AudioPlayer_MicrophoneLastDetectionTimestamp = millis();
+	}
+}
+
 class AudioCustom : public Audio {
 public:
 	void *operator new(size_t size) {
@@ -389,7 +425,8 @@ void AudioPlayer_Task(void *parameter) {
 	uint32_t playbackTimeoutStart = millis();
 
 	AudioPlayer_CurrentVolume = AudioPlayer_GetInitVolume();
-	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+	//audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK);
 	audio->setVolumeSteps(AUDIOPLAYER_VOLUME_MAX);
 	audio->setVolume(AudioPlayer_CurrentVolume, VOLUMECURVE);
 	audio->forceMono(gPlayProperties.currentPlayMono);
@@ -540,6 +577,20 @@ void AudioPlayer_Task(void *parameter) {
 						AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber), audio->getFilePos() - audio->inBufferFilled(), gPlayProperties.playMode, gPlayProperties.currentTrackNumber, gPlayProperties.playlist->size());
 					}
 					gPlayProperties.pausePlay = !gPlayProperties.pausePlay;
+					Web_SendWebsocketData(0, WebsocketCodeType::TrackInfo);
+					continue;
+
+				case PAUSE:
+					trackCommand = NO_ACTION;
+					audio->pause();
+	
+					Log_Println(cmndPause, LOGLEVEL_INFO);
+					
+					if (gPlayProperties.saveLastPlayPosition && !gPlayProperties.pausePlay) {
+						Log_Printf(LOGLEVEL_INFO, trackPausedAtPos, audio->getFilePos(), audio->getFilePos() - audio->inBufferFilled());
+						AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber), audio->getFilePos() - audio->inBufferFilled(), gPlayProperties.playMode, gPlayProperties.currentTrackNumber, gPlayProperties.playlist->size());
+					}
+					gPlayProperties.pausePlay = true;
 					Web_SendWebsocketData(0, WebsocketCodeType::TrackInfo);
 					continue;
 
@@ -899,6 +950,7 @@ void AudioPlayer_Task(void *parameter) {
 			if (noAudio && timeout) {
 				// Audio playback timed out, move on to the next
 				System_IndicateError();
+				Log_Println("No Audio Error, move to next track!",LOGLEVEL_INFO);
 				gPlayProperties.trackFinished = true;
 				playbackTimeoutStart = millis();
 			}

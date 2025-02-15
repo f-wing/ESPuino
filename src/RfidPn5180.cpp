@@ -236,8 +236,9 @@ void Rfid_Task(void *parameter) {
 		}
 
 	#ifdef PAUSE_WHEN_RFID_REMOVED
-		if (!cardAppliedCurrentRun && cardAppliedLastRun && !gPlayProperties.pausePlay && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) { // Card removed => pause
-			AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+		if (!cardAppliedCurrentRun && cardAppliedLastRun /*&& !gPlayProperties.pausePlay*/ && System_GetOperationMode() != OPMODE_BLUETOOTH_SINK) { // Card removed => pause
+			//AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+			AudioPlayer_TrackControlToQueueSender(STOP); //completely forget RFID card once it is removed
 			Log_Println(rfidTagRemoved, LOGLEVEL_NOTICE);
 		}
 		cardAppliedLastRun = cardAppliedCurrentRun;

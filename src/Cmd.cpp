@@ -283,6 +283,15 @@ void Cmd_Action(const uint16_t mod) {
 			break;
 		}
 
+		case CMD_PAUSE: {
+			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
+					AudioPlayer_TrackControlToQueueSender(PAUSE);
+			} else {
+				Bluetooth_PauseTrack();
+			}
+			break;
+		}
+
 		case CMD_PREVTRACK: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
 				AudioPlayer_TrackControlToQueueSender(PREVIOUSTRACK);

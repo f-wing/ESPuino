@@ -7,6 +7,7 @@ void Bluetooth_Cyclic(void);
 
 // Support for AVRC Commands starting from ESP32 Release 1.0.6
 void Bluetooth_PlayPauseTrack(void);
+void Bluetooth_PauseTrack(void);
 void Bluetooth_NextTrack(void);
 void Bluetooth_PreviousTrack(void);
 

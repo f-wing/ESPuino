@@ -14,6 +14,9 @@
 
 unsigned long Rfid_LastRfidCheckTimestamp = 0;
 char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
+
+extern bool NewRFIDPresented;
+
 #ifdef DONT_ACCEPT_SAME_RFID_TWICE_ENABLE
 char gOldRfidTagId[cardIdStringSize] = "X"; // Init with crap
 #endif
@@ -98,6 +101,8 @@ void Rfid_PreferenceLookupHandler(void) {
 	#endif
 
 				AudioPlayer_TrackQueueDispatcher(_file, _lastPlayPos, _playMode, _trackLastPlayed);
+				NewRFIDPresented = true;
+
 			}
 		}
 	}
