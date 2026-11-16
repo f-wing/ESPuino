@@ -381,6 +381,7 @@
 					"185": "📁 Jump to previous folder",
 					"186": "🎯 Seek preview (turn to scrub, commits on release/idle)",
 					"199": "📊 Display task load (console)",
+					"230": "⏸ Pause (pause only, never resumes)",
 					"241": "🏷 Play virtual RFID-card 01",
 					"242": "🏷 Play virtual RFID-card 02",
 					"243": "🏷 Play virtual RFID-card 03",
