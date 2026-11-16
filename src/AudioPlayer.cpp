@@ -198,6 +198,9 @@ bool newPlayListAvailable = false;
 static bool AudioPlayer_UploadActive = false;
 static bool AudioPlayer_WasPausedBeforeUpload = false; // remember pre-upload pause state
 static bool gResetOldRfidOnIdle = false; // release the "don't accept same rfid twice"-lock on next idle-state
+// [custom] No autoplay when a card is presented. A file is opened and paused right away; a webstream cannot be
+// paused before it runs, so it is not connected at all until play is pressed. True while it waits for that.
+static bool AudioPlayer_StartOnPlay = false;
 
 // Remember an RFID-tag whose webstream could not be started because WiFi is not (yet) connected, so it can
 // be re-injected into the RFID-queue once WiFi is up (see handleWifiStateConnectionSuccess() in Wlan.cpp).
@@ -1005,6 +1008,7 @@ void AudioPlayer_Loop() {
 	if (newPlayListAvailable || gPlayProperties.trackFinished || trackCommand != NO_ACTION) {
 		if (newPlayListAvailable) {
 			newPlayListAvailable = false;
+			AudioPlayer_StartOnPlay = false;
 			// A freshly tapped card supersedes a running announcement: there is no longer anything to
 			// return to, so drop it without restoring.
 			gPlayProperties.announcementActive = false;
@@ -1086,6 +1090,7 @@ void AudioPlayer_Loop() {
 			case STOP:
 				audio->stopSong();
 				trackCommand = NO_ACTION;
+				AudioPlayer_StartOnPlay = false;
 				Log_Println(cmndStop, LOGLEVEL_INFO);
 				gPlayProperties.pausePlay = true;
 				gPlayProperties.playlistFinished = true;
@@ -1099,6 +1104,17 @@ void AudioPlayer_Loop() {
 
 			case PAUSEPLAY:
 				trackCommand = NO_ACTION;
+				if (AudioPlayer_StartOnPlay) {
+					// [custom] First play after a card with a webstream was presented: connect now, via the
+					// regular track-open path below the switch.
+					gPlayProperties.pausePlay = false;
+					playbackTimeoutStart = millis();
+					Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
+#ifdef MQTT_ENABLE
+					publishMqtt(topicPausePlay, "play", false);
+#endif
+					break;
+				}
 				audio->pauseResume();
 				if (gPlayProperties.pausePlay) {
 					Log_Println(cmndResumeFromPause, LOGLEVEL_INFO);
@@ -1388,7 +1404,25 @@ void AudioPlayer_Loop() {
 		gPlayProperties.currentRelPos = 0;
 		audioReturnCode = false;
 
+		const bool startOnPlayRequested = AudioPlayer_StartOnPlay;
+		AudioPlayer_StartOnPlay = false;
+
 		if (gPlayProperties.playMode == WEBSTREAM || (gPlayProperties.playMode == LOCAL_M3U && gPlayProperties.isWebstream)) { // Webstream
+			// [custom] disable autoplay when rfid is presented: don't connect yet, wait for play
+			if (NewRFIDPresented && !startOnPlayRequested) {
+				NewRFIDPresented = false;
+				AudioPlayer_StartOnPlay = true;
+				gPlayProperties.pausePlay = true;
+				gPlayProperties.playlistFinished = false;
+				Audio_setTitle("%s", "Webradio");
+				AudioPlayer_ClearCover();
+#ifdef MQTT_ENABLE
+				publishMqtt(topicPausePlay, "pause", false);
+#endif
+				Web_SendWebsocketData(0, WebsocketCodeType::TrackInfo);
+				return;
+			}
+			NewRFIDPresented = false;
 			audioReturnCode = audio->connecttohost(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
 			gPlayProperties.playlistFinished = false;
 		} else if (gPlayProperties.playMode != WEBSTREAM && !gPlayProperties.isWebstream) {
