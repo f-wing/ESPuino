@@ -43,16 +43,25 @@ class ES8388 {
  private:
   outsel_t _outSel = OUTALL;
   insel_t _inSel = IN1;
-  TwoWire i2c = TwoWire(0);
-  uint8_t _pinsda, _pinscl;
-  uint32_t _i2cspeed;
+  // I2C bus the codec is connected to. Shared by all instances, so that several
+  // ES8388 objects (e.g. one per source file) talk to the same chip over the same bus.
+  static TwoWire* _wire;
   bool write_reg(uint8_t reg_add, uint8_t data);
   bool read_reg(uint8_t reg_add, uint8_t& data);
 
  public:
+  // Uses the bus selected with setBus(). Does not touch any hardware, so it is
+  // safe for global objects.
+  ES8388();
+  // Original constructor: starts Wire (I2C bus 0) on the given pins and uses it.
   ES8388(uint8_t _sda, uint8_t _scl, uint32_t _speed);
   ~ES8388();
+  // Select an I2C bus that the application has already started with begin().
+  static void setBus(TwoWire& wire);
   bool init();
+  // Mutes the outputs and puts the codec into its low-power standby state.
+  // init() has to be called again before the codec can be used afterwards.
+  bool power_down();
   bool identify(int sda, int scl, uint32_t frequency);
   uint8_t* readAllReg();
   bool outputSelect(outsel_t sel);

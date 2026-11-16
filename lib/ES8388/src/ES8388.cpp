@@ -61,39 +61,48 @@
 #define ES8388_DACCONTROL29 0x33
 #define ES8388_DACCONTROL30 0x34
 
+TwoWire* ES8388::_wire = nullptr;
+
+ES8388::ES8388() {}
+
 ES8388::ES8388(uint8_t _sda, uint8_t _scl, uint32_t _speed) {
-  _pinsda = _sda;
-  _pinscl = _scl;
-  _i2cspeed = _speed;
-  i2c.begin(_sda, _scl, _speed);
+  Wire.begin(_sda, _scl, _speed);
+  _wire = &Wire;
 }
 
-ES8388::~ES8388() { i2c.~TwoWire(); }
+// The bus belongs to the application (it may be shared with other devices), so it
+// is deliberately left running here.
+ES8388::~ES8388() {}
+
+void ES8388::setBus(TwoWire& wire) { _wire = &wire; }
 
 bool ES8388::write_reg(uint8_t reg_add, uint8_t data) {
-  i2c.beginTransmission(ES8388_ADDR);
-  i2c.write(reg_add);
-  i2c.write(data);
-  return i2c.endTransmission() == 0;
+  if (_wire == nullptr) return false;
+  _wire->beginTransmission(ES8388_ADDR);
+  _wire->write(reg_add);
+  _wire->write(data);
+  return _wire->endTransmission() == 0;
 }
 
 bool ES8388::read_reg(uint8_t reg_add, uint8_t& data) {
   bool retval = false;
-  i2c.beginTransmission(ES8388_ADDR);
-  i2c.write(reg_add);
-  i2c.endTransmission(false);
-  i2c.requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
-  if (i2c.available() >= 1) {
-    data = i2c.read();
+  if (_wire == nullptr) return false;
+  _wire->beginTransmission(ES8388_ADDR);
+  _wire->write(reg_add);
+  _wire->endTransmission(false);
+  _wire->requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
+  if (_wire->available() >= 1) {
+    data = _wire->read();
     retval = true;
   }
   return retval;
 }
 
 bool ES8388::identify(int sda, int scl, uint32_t frequency) {
-  i2c.begin(sda, scl, frequency);
-  i2c.beginTransmission(ES8388_ADDR);
-  return i2c.endTransmission() == 0;
+  Wire.begin(sda, scl, frequency);
+  _wire = &Wire;
+  _wire->beginTransmission(ES8388_ADDR);
+  return _wire->endTransmission() == 0;
 }
 
 uint8_t* ES8388::readAllReg() {
@@ -168,6 +177,29 @@ bool ES8388::init() {
   /* Power up DEM and STM */
   res &= write_reg(ES8388_CHIPPOWER, 0x00);
   /* set up MCLK) */
+  return res;
+}
+
+// Standby: silence the outputs first so that nothing pops, then return the
+// power-management registers to (or below) their power-on-reset state.
+// Every register touched here is written again by init().
+bool ES8388::power_down() {
+  bool res = true;
+  // mute DAC
+  res &= write_reg(ES8388_DACCONTROL3, 0x04);
+  // disconnect DAC and microphone/line path from the output mixers
+  res &= write_reg(ES8388_DACCONTROL17, 0x00);
+  res &= write_reg(ES8388_DACCONTROL20, 0x00);
+  // power down DAC L/R, disable LOUT1/ROUT1/LOUT2/ROUT2
+  res &= write_reg(ES8388_DACPOWER, 0xC0);
+  // power down ADC, analog inputs and microphone bias
+  res &= write_reg(ES8388_ADCPOWER, 0xFF);
+  // Power down DEM and STM (as at the start of init())
+  res &= write_reg(ES8388_CHIPPOWER, 0xFF);
+  // power down analog and Ibias (reset value)
+  res &= write_reg(ES8388_CONTROL2, 0x5C);
+  // keep the reference alive through the 500k divider only (reset value)
+  res &= write_reg(ES8388_CONTROL1, 0x06);
   return res;
 }
 
