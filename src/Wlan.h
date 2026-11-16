@@ -4,6 +4,13 @@
 #include <functional>
 #include <optional>
 
+// Hostname rules, driven mainly by mDNS. The length is written down here and nowhere else: it
+// is published to both web interfaces, which cap their input field with it, while the character
+// rules live in that field's pattern. Unlike the MQTT and FTP lengths this is a true maximum,
+// not n-1.
+constexpr uint8_t hostnameMinLength = 2u;
+constexpr uint8_t hostnameMaxLength = 32u;
+
 // be very careful changing this struct, as it is used for NVS storage and will corrupt existing entries
 struct WiFiSettings {
 	struct StaticIp {
@@ -118,8 +125,23 @@ const String Wlan_GetMacAddress();
 bool Wlan_DeleteNetwork(String);
 bool Wlan_ValidateHostname(String);
 bool Wlan_SetHostname(String);
+const String Wlan_GetApSSID(void);
+bool Wlan_ValidateApSSID(String);
+bool Wlan_SetApSSID(String);
+const String Wlan_GetApPassword(void);
+bool Wlan_ValidateApPassword(String);
+bool Wlan_SetApPassword(String);
+uint32_t Wlan_GetApTimeoutMinutes(void);
+bool Wlan_SetApTimeoutMinutes(uint32_t);
 bool Wlan_IsConnected(void);
+void Wlan_SetPowerSave(bool enabled);
 void Wlan_ToggleEnable(void);
 String Wlan_GetIpAddress(void);
 int8_t Wlan_GetRssi(void);
 bool Wlan_ConnectionTryInProgress(void);
+const char *Wlan_GetConnectState(void);
+bool Wlan_GetLastFailure(String &ssid, uint8_t &reason);
+bool Wlan_StartConnectionTest(const String &ssid);
+const char *Wlan_GetTestPhase(void);
+uint8_t Wlan_GetTestReason(void);
+const String Wlan_GetTestSsid(void);

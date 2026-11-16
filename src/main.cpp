@@ -21,18 +21,19 @@
 #include "Power.h"
 #include "Queues.h"
 #include "Rfid.h"
+#include "RfidConfig.h"
 #include "RotaryEncoder.h"
 #include "SdCard.h"
 #include "System.h"
 #include "Web.h"
 #include "Wlan.h"
-#include "revision.h"
+#include "gitrevision.h"
 #include "ES8388.h"
 
 #include <Wire.h>
 
-bool gPlayLastRfIdWhenWiFiConnected = false;
-bool gTriedToConnectToHost = false;
+bool gRetryRfidOnWifiConnect = false;
+char gRetryRfidTagId[cardIdStringSize] = "";
 
 bool NewRFIDPresented = false;
 
@@ -52,27 +53,18 @@ bool testSPIRAM(void) {
 	return true;
 }
 
-#ifdef PLAY_LAST_RFID_AFTER_REBOOT
 bool recoverLastRfid = true;
 bool recoverBootCount = true;
 bool resetBootCount = false;
 uint32_t bootCount = 0;
-#endif
 
 ////////////
-
-#if (HAL == 2)
-	#include "AC101.h"
-static TwoWire i2cBusOne = TwoWire(0);
-static AC101 ac(&i2cBusOne);
-#endif
 
 // I2C
 #ifdef I2C_2_ENABLE
 TwoWire i2cBusTwo = TwoWire(1);
 #endif
 
-#ifdef PLAY_LAST_RFID_AFTER_REBOOT
 // If a problem occurs, remembering last rfid can lead into a boot loop that's hard to escape of.
 // That reason for a mechanism is necessary to prevent this.
 // At start of a boot, bootCount is incremented by one and after 30s decremented because
@@ -118,12 +110,10 @@ void recoverLastRfidPlayedFromNvs(bool force) {
 			Log_Println(unableToRestoreLastRfidFromNVS, LOGLEVEL_INFO);
 		} else {
 			xQueueSend(gRfidCardQueue, lastRfidPlayed.c_str(), 0);
-			gPlayLastRfIdWhenWiFiConnected = !force;
 			Log_Printf(LOGLEVEL_INFO, restoredLastRfidFromNVS, lastRfidPlayed.c_str());
 		}
 	}
 }
-#endif
 
 void setup() {
 	Log_Init();
@@ -131,10 +121,15 @@ void setup() {
 
 	// Make sure all wakeups can be enabled *before* initializing RFID, which can enter sleep immediately
 	Button_Init(); // To preseed internal button-storage with values
-#ifdef PN5180_ENABLE_LPCD
-	Rfid_Init();
-#endif
 
+	System_Init_Rfid_Prefs();
+	const bool pn5180LpcdEnabled = gPrefsRfid.getBool("pn5180Lpcd", false);
+	if (pn5180LpcdEnabled) {
+		// Only handle a possible deep-sleep wakeup here; starting the RFID scanning task
+		// this early raced with the peripheral init below and could hang the boot (see
+		// Rfid_StartTask() call further down).
+		Rfid_WakeupHandling();
+	}
 	System_Init();
 
 // Init 2nd i2c-bus if RC522 is used with i2c or if port-expander is enabled
@@ -157,25 +152,25 @@ void setup() {
 	Battery_Init();
 
 	// Init ES8388
- 	ES8388 es8388;
+	ES8388 es8388;
 
 	Serial.println("Read Reg ES8388 : ");
-	if (!es8388.init()) Log_Println("ES8388 Init Failed!", LOGLEVEL_ERROR);;
+	if (!es8388.init()) {
+		Log_Println("ES8388 Init Failed!", LOGLEVEL_ERROR);
+	}
 	es8388.inputSelect(IN1); // always keep microphone input active
 	es8388.setInputGain(0);
 	es8388.setALCmode(VOICE);
 	es8388.outputSelect(OUTALL);
-	es8388.setOutputVolume(30);//i.e. -24dB gain to compensate PAM8302A gain of 23.5dB
+	es8388.setOutputVolume(30); // i.e. -24dB gain to compensate PAM8302A gain of 23.5dB
 	es8388.mixerSourceSelect(MIXADC, MIXADC);
 	//	es8388.mixerSourceControl(MIXALL); done in AudioPlayer_Init()
-	
+
 	// only for debugging purposes
-	uint8_t *reg;
-	for (uint8_t i = 0; i < 53; i++) {
-		//reg = es8388.readAllReg();
-		//Serial.printf("Reg-%02d = 0x%02x\r\n", i, reg[i]);
-		//Log_Printf(LOGLEVEL_NOTICE, "Reg-%02d = 0x%02x\r", i, reg[i]);
-	} 
+	// uint8_t *reg = es8388.readAllReg();
+	// for (uint8_t i = 0; i < 53; i++) {
+	// 	Log_Printf(LOGLEVEL_NOTICE, "Reg-%02d = 0x%02x\r", i, reg[i]);
+	// }
 
 	// Init audio before power on to avoid speaker noise
 	AudioPlayer_Init();
@@ -184,21 +179,6 @@ void setup() {
 	Power_PeripheralOn();
 
 	Led_Init();
-
-// Only used for ESP32-A1S-Audiokit
-#if (HAL == 2)
-	i2cBusOne.begin(IIC_DATA, IIC_CLK, 40000);
-
-	while (not ac.begin()) {
-		Log_Println("AC101 Failed!", LOGLEVEL_ERROR);
-		delay(1000);
-	}
-	Log_Println("AC101 via I2C - OK!", LOGLEVEL_NOTICE);
-
-	pinMode(22, OUTPUT);
-	digitalWrite(22, HIGH);
-	ac.SetVolumeHeadphone(80);
-#endif
 
 	// Needs power first
 	SdCard_Init();
@@ -218,15 +198,16 @@ void setup() {
 	SdCard_PrintInfo();
 
 	Ftp_Init();
-	Mqtt_Init();
-#ifndef PN5180_ENABLE_LPCD
-	#if defined(RFID_READER_TYPE_MFRC522_SPI) || defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_PN5180)
-	Rfid_Init();
-	#endif
-#endif
+	if (!pn5180LpcdEnabled) {
+		Rfid_Init();
+	} else {
+		// Peripherals are up now, safe to start the scanning task deferred above.
+		Rfid_StartTask();
+	}
 	RotaryEncoder_Init();
-	Wlan_Init();
 	Bluetooth_Init();
+	Wlan_Init();
+	Mqtt_Init();
 
 	if (OPMODE_NORMAL == System_GetOperationMode()) {
 		Wlan_Cyclic();
@@ -264,40 +245,33 @@ void setup() {
 }
 
 void loop() {
+	Wlan_Cyclic();
+	Web_Cyclic();
 	if (OPMODE_BLUETOOTH_SINK == System_GetOperationMode()) {
 		// bluetooth speaker mode
 		Bluetooth_Cyclic();
 	} else if (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode()) {
 		// bluetooth headset mode
 		Bluetooth_Cyclic();
-		RotaryEncoder_Cyclic();
-	} else {
-		// normal mode
-		Wlan_Cyclic();
-		Web_Cyclic();
-		Ftp_Cyclic();
-		RotaryEncoder_Cyclic();
-		Mqtt_Cyclic();
 	}
-	vTaskDelay(portTICK_PERIOD_MS * 1u);
+	RotaryEncoder_Cyclic();
+	Ftp_Cyclic();
 	AudioPlayer_Cyclic();
-	vTaskDelay(portTICK_PERIOD_MS * 1u);
 	Battery_Cyclic();
-	// Port_Cyclic(); // called by button (controlled via hw-timer)
 	Button_Cyclic();
-	vTaskDelay(portTICK_PERIOD_MS * 1u);
 	System_Cyclic();
 	Rfid_PreferenceLookupHandler();
 
-#ifdef PLAY_LAST_RFID_AFTER_REBOOT
-	recoverBootCountFromNvs();
-	recoverLastRfidPlayedFromNvs();
-#endif
+	if (gPrefsSettings.getBool("playLastOnBoot", false)) {
+		recoverBootCountFromNvs();
+		recoverLastRfidPlayedFromNvs();
+	}
 
 	IrReceiver_Cyclic();
-	vTaskDelay(portTICK_PERIOD_MS * 2u);
 
 #ifdef HALLEFFECT_SENSOR_ENABLE
 	gHallEffectSensor.cyclic();
 #endif
+
+	vTaskDelay(portTICK_PERIOD_MS * 6u);
 }

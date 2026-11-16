@@ -12,57 +12,40 @@
 
 	//################## HARDWARE-PLATFORM ###############################
 	/* Make sure to also edit the configfile, that is specific for your platform.
-	If in doubts (your develboard is not listed) use HAL 1
-	1: Wemos Lolin32                        => settings-lolin32.h
-	2: ESP32-A1S Audiokit                   => settings-espa1s.h
-	3: Wemos Lolin D32                      => settings-lolin_D32.h
-	4: Wemos Lolin D32 pro                  => settings-lolin_D32_pro.h
-	5: Lilygo T8 (V1.7)                     => settings-ttgo_t8.h
-	6: ESPuino complete                     => settings-complete.h
-	7: Lolin D32 pro SDMMC Port-Expander    => settings-lolin_d32_pro_sdmmc_pe.h
-	8: AZDelivery ESP32 NodeMCU             => settings-azdelivery_sdmmc.h
-	9: Lolin D32 SDMMC Port-Expander        => settings-lolin_d32_sdmmc_pe.h
-	99: custom                              => settings-custom.h
-	more to come...
+	If in doubts (your board is not listed) use HAL 7
+
+	!!!Only ESP32 with PSRAM are supported!!!
+
+	HAL 4: Wemos Lolin D32 pro                  => settings-lolin_D32_pro.h
+	HAL 5: Lilygo T8 (V1.7)                     => settings-ttgo_t8.h
+	HAL 6: ESPuino complete                     => settings-complete.h
+	HAL 7: Lolin D32 pro SDMMC Port-Expander    => settings-lolin_d32_pro_sdmmc_pe.h
+	HAL 99: custom                              => settings-custom.h
 	*/
-	#ifndef HAL             // Will be set by platformio.ini. If using Arduino-IDE you have to set HAL according your needs!
-		#define HAL 1       // HAL 1 = LoLin32, 2 = ESP32-A1S-AudioKit, 3 = Lolin D32, 4 = Lolin D32 pro; ... 99 = custom
+	#ifndef HAL             // Will be set by platformio.ini. There's no need to adjust this manually right here
+		#define HAL 7
 	#endif
 
+	// Enforce port expander for some HALs because it's mandatory for those and users constantly forget it. Endless story...
+	#if (HAL == 6) || (HAL == 7)
+		#define PORT_EXPANDER_ENABLE 
+	#endif
 
 	//########################## MODULES #################################
-	#define PORT_EXPANDER_ENABLE          // When enabled, buttons can be connected via port-expander PCA9555 (https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306)
+	//#define PORT_EXPANDER_ENABLE          // When enabled, buttons can be connected via port-expander PCA9555 (https://forum.espuino.de/t/einsatz-des-port-expanders-pca9555/306)
 	//#define I2S_COMM_FMT_LSB_ENABLE       // Enables FMT instead of MSB for I2S-communication-format. Used e.g. by PT2811. Don't enable for MAX98357a, AC101 or PCM5102A)
 	#define MDNS_ENABLE                     // When enabled, you don't have to handle with ESPuino's IP-address. If hostname is set to "ESPuino", you can reach it via ESPuino.local
-	//#define MQTT_ENABLE                   // Make sure to configure mqtt-server and (optionally) username+pwd
+	#define MQTT_ENABLE                     // Make sure to configure mqtt-server and (optionally) username+pwd
 	#define FTP_ENABLE                      // Enables FTP-server; DON'T FORGET TO ACTIVATE AFTER BOOT BY PRESSING PAUSE + NEXT-BUTTONS (IN PARALLEL)!
 	#define NEOPIXEL_ENABLE                 // Don't forget configuration of NUM_LEDS if enabled
-	#define NEOPIXEL_REVERSE_ROTATION     // Some Neopixels are adressed/soldered counter-clockwise. This can be configured here.
-	#define LANGUAGE DE                     // DE = deutsch; EN = english
-	//#define STATIC_IP_ENABLE              // DEPRECATED: Enables static IP-configuration (change static ip-section accordingly)
-	#define HEADPHONE_ADJUST_ENABLE         // Used to adjust (lower) volume for optional headphone-pcb (refer maxVolumeSpeaker / maxVolumeHeadphone) and to enable stereo (if PLAY_MONO_SPEAKER is set)
-	#define PLAY_MONO_SPEAKER             // If only one speaker is used enabling mono should make sense. Please note: headphones is always stereo (if HEADPHONE_ADJUST_ENABLE is active)
+	#define LANGUAGE DE                     // DE = deutsch; EN = english: FR = french
+	#define HEADPHONE_ADJUST_ENABLE         // Used to adjust (lower) volume for optional headphone-pcb (refer maxVolumeSpeaker / maxVolumeHeadphone) and to enable stereo (headphones are always stereo, even if mono-playback is enabled via GUI)
 	#define SHUTDOWN_IF_SD_BOOT_FAILS       // Will put ESP to deepsleep if boot fails due to SD. Really recommend this if there's in battery-mode no other way to restart ESP! Interval adjustable via deepsleepTimeAfterBootFails.
 	#define MEASURE_BATTERY_VOLTAGE         // Enables battery-measurement via GPIO (ADC) and voltage-divider
-	//#define MEASURE_BATTERY_MAX17055      // Enables battery-measurement via external fuel gauge (MAX17055)
-	#define SHUTDOWN_ON_BAT_CRITICAL      // Whether to turn off on critical battery-level (only used if MEASURE_BATTERY_XXX is active)
-	//#define PLAY_LAST_RFID_AFTER_REBOOT   // When restarting ESPuino, the last RFID that was active before, is recalled and played
-	#define USE_LAST_VOLUME_AFTER_REBOOT  // Remembers the volume used at last shutdown after reboot
 	#define USEROTARY_ENABLE                // If rotary-encoder is used (don't forget to review WAKEUP_BUTTON if you disable this feature!)
 	#define BLUETOOTH_ENABLE                // If enabled and bluetooth-mode is active, you can stream to your ESPuino or to a headset via bluetooth (a2dp-sink & a2dp-source). Note: This feature consumes a lot of resources and the available flash/ram might not be sufficient.
 	//#define IR_CONTROL_ENABLE             // Enables remote control (https://forum.espuino.de/t/neues-feature-fernsteuerung-per-infrarot-fernbedienung/265)
-	#define PAUSE_WHEN_RFID_REMOVED       // Playback starts when card is applied and pauses automatically, when card is removed (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
-	//#define PAUSE_ON_MIN_VOLUME           // When playback is active and volume is changed to zero, playback is paused automatically. Playback is continued if volume reaches 1. (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541)
-	//#define DONT_ACCEPT_SAME_RFID_TWICE   // RFID-reader doesn't accept the same RFID-tag twice in a row (unless it's a modification-card or RFID-tag is unknown in NVS). Flag will be ignored silently if PAUSE_WHEN_RFID_REMOVED is active. (https://forum.espuino.de/t/neues-feature-dont-accept-same-rfid-twice/1247)
-	//#define SAVE_PLAYPOS_BEFORE_SHUTDOWN  // When playback is active and mode audiobook was selected, last play-position is saved automatically when shutdown is initiated
-	//#define SAVE_PLAYPOS_WHEN_RFID_CHANGE // When playback is active and mode audiobook was selected, last play-position is saved automatically for old playlist when new RFID-tag is applied
 	//#define HALLEFFECT_SENSOR_ENABLE      // Support for hallsensor. For fine-tuning please adjust HallEffectSensor.h Please note: only user-support provided (https://forum.espuino.de/t/magnetische-hockey-tags/1449/35)
-	#define VOLUMECURVE 0 					// 0=square, 1=logarithmic (1 is more flatten at lower volume)
-
-	//################## set PAUSE_WHEN_RFID_REMOVED behaviour #############################
-	#ifdef PAUSE_WHEN_RFID_REMOVED
-		#define ACCEPT_SAME_RFID_AFTER_TRACK_END           // Accepts same RFID after playback has ended (https://forum.espuino.de/t/neues-feature-pausieren-wenn-rfid-karte-entfernt-wurde/541/2)
-	#endif
 
 	//################## select SD card mode #############################
 	#define SD_MMC_1BIT_MODE              // run SD card in SD-MMC 1Bit mode (using GPIOs 15 + 14 + 2 is mandatory!)
@@ -71,22 +54,17 @@
 
 
 	//################## select RFID reader ##############################
-	//#define RFID_READER_TYPE_MFRC522_SPI    // use MFRC522 via SPI
-	//#define RFID_READER_TYPE_MFRC522_I2C  // use MFRC522 via I2C
-	#define RFID_READER_TYPE_PN5180       // use PN5180 via SPI
+	// Runtime RFID reader selection is now supported via web interface
+	// Runtime RFID reader type configuration
+	// 0 = Auto-detect
+	// 1 = MFRC522 (SPI)
+	// 2 = MFRC522 (I2C)
+	// 3 = PN5180
+	#define RFID_READER_TYPE_RUNTIME 3    // [custom] PN5180 (was: #define RFID_READER_TYPE_PN5180). Upstream default is 0 = Auto-detect
 
-	#ifdef RFID_READER_TYPE_MFRC522_I2C
+	#if defined(RFID_READER_TYPE_RUNTIME)
 		#define MFRC522_ADDR 0x28           // default I2C-address of MFRC522
 	#endif
-
-	#ifdef RFID_READER_TYPE_PN5180
-		//#define PN5180_ENABLE_LPCD        // Wakes up ESPuino if RFID-tag was applied while deepsleep is active.
-	#endif
-
-	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(RFID_READER_TYPE_MFRC522_SPI)
-		constexpr uint8_t rfidGain = 0x07 << 4;      // Sensitivity of RC522. For possible values see reference: https://forum.espuino.de/uploads/default/original/1X/9de5f8d35cbc123c1378cad1beceb3f51035cec0.png
-	#endif
-
 
 	//############# Port-expander-configuration ######################
 	#ifdef PORT_EXPANDER_ENABLE
@@ -135,6 +113,21 @@
 	#define BUTTON_4_LONG     CMD_NOTHING
 	#define BUTTON_5_LONG     CMD_PAUSE
 
+	// Rotary gestures: hold the button, turn the encoder. CMD_NOTHING disables the button as a modifier.
+	// A modifier button keeps its normal short/long action when it is pressed *without* turning the encoder.
+	#define BUTTON_0_ROTARY_CW   CMD_SEEK_FORWARDS   // hold NEXT + turn: seek within the track
+	#define BUTTON_0_ROTARY_CCW  CMD_SEEK_BACKWARDS
+	#define BUTTON_1_ROTARY_CW   CMD_NOTHING
+	#define BUTTON_1_ROTARY_CCW  CMD_NOTHING
+	#define BUTTON_2_ROTARY_CW   CMD_BRIGHTNESS_UP   // hold PLAY/PAUSE + turn: LED brightness
+	#define BUTTON_2_ROTARY_CCW  CMD_BRIGHTNESS_DOWN
+	#define BUTTON_3_ROTARY_CW   CMD_NOTHING         // rotary push: short=play/pause, long=sleep -- left free on purpose
+	#define BUTTON_3_ROTARY_CCW  CMD_NOTHING
+	#define BUTTON_4_ROTARY_CW   CMD_NOTHING
+	#define BUTTON_4_ROTARY_CCW  CMD_NOTHING
+	#define BUTTON_5_ROTARY_CW   CMD_NOTHING
+	#define BUTTON_5_ROTARY_CCW  CMD_NOTHING
+
 	#define BUTTON_MULTI_01   CMD_MEASUREBATTERY    //CMD_TOGGLE_WIFI_STATUS (disabled now to prevent children from unwanted WiFi-disable)
 	#define BUTTON_MULTI_02   CMD_NOTHING
 	#define BUTTON_MULTI_03   CMD_NOTHING
@@ -156,16 +149,6 @@
 	// Serial-logging-configuration
 	#define SERIAL_LOGLEVEL LOGLEVEL_DEBUG              // Current loglevel for serial console
 
-    // DEPRECATED: This is now done using dynamic network configuration.
-    //              If left, it is used for the automatic migration exactly once
-	// Static ip-configuration
-	#ifdef STATIC_IP_ENABLE
-		#define LOCAL_IP   192,168,2,100                // ESPuino's IP
-		#define GATEWAY_IP 192,168,2,1                  // IP of the gateway/router
-		#define SUBNET_IP  255,255,255,0                // Netmask of your network (/24 => 255.255.255.0)
-		#define DNS_IP     192,168,2,1                  // DNS-server of your network; in private networks it's usually the gatewy's IP
-	#endif
-
 	// Buttons (better leave unchanged if in doubts :-))
 	constexpr uint8_t buttonDebounceInterval = 50;                // Interval in ms to software-debounce buttons
 	constexpr uint16_t intervalToLongPress = 700;                 // Interval in ms to distinguish between short and long press of buttons
@@ -180,9 +163,6 @@
 
 	//#define CONTROLS_LOCKED_BY_DEFAULT			// If set the controls are locked at boot
 	#define INCLUDE_ROTARY_IN_CONTROLS_LOCK			// If set the rotary encoder is locked if controls are locked
-
-	// RFID-RC522
-	#define RFID_SCAN_INTERVAL 100                      // Interval-time in ms (how often is RFID read?)
 
 	// Automatic restart
 	#ifdef SHUTDOWN_IF_SD_BOOT_FAILS
@@ -199,10 +179,6 @@
 	// example for America/Toronto:	"EST5EDT,M3.2.0,M11.1.0"
 	constexpr const char timeZone[] = "CET-1CEST,M3.5.0,M10.5.0/3"; // Europe/Berlin
 
-	// ESPuino will create a WiFi if joing existing WiFi was not possible. Name and password can be configured here.
-	constexpr const char accessPointNetworkSSID[] = "ESPuino";     // Access-point's SSID
-	constexpr const char accessPointNetworkPassword[] = "";        // Access-point's Password, at least 8 characters! Set to an empty string to spawn an open WiFi.
-
 	// Bluetooth
 	constexpr const char nameBluetoothSinkDevice[] = "ESPuino";        // Name of your ESPuino as Bluetooth-device
 
@@ -212,46 +188,25 @@
 	//#################### Settings for optional Modules##############################
 	// (optinal) Neopixel
 	#ifdef NEOPIXEL_ENABLE
-		#define NUM_INDICATOR_LEDS		24          	// number of Neopixel LEDs (formerly NUM_LEDS)
-		#define NUM_CONTROL_LEDS		0		// optional control leds (https://forum.espuino.de/t/statische-ws2812-leds/1703)
-                #define CONTROL_LEDS_COLORS		{}		// Colors for the control LEDs. Make sure it lists at least NUM_CONTROL_LEDS colors, e.g. for three control LEDs define: CONTROL_LEDS_COLORS {CRGB::Yellow, CRGB::Blue, 0xFFFFFF} (predefined colors: http://fastled.io/docs/3.1/struct_c_r_g_b.html)
-		#define CHIPSET					WS2812B     	// type of Neopixel
-		#define COLOR_ORDER				GRB
-		#define NUM_LEDS_IDLE_DOTS		8           	// count of LEDs, which are shown when Idle
-		#define OFFSET_PAUSE_LEDS		false		// if true the pause-leds are centered in the mid of the LED-Strip
-		#define PROGRESS_HUE_START		85          	// Start and end hue of mulitple-LED progress indicator. Hue ranges from basically 0 - 255, but you can also set numbers outside this range to get the desired effect (e.g. 85-215 will go from green to purple via blue, 341-215 start and end at exactly the same color but go from green to purple via yellow and red)
-		#define PROGRESS_HUE_END		-1
-		#define DIMMABLE_STATES			50		// Number of dimmed values between two full LEDs (https://forum.espuino.de/t/led-verbesserungen-rework/1739)
-		//#define LED_OFFSET                		0           	// shifts the starting LED in the original direction of the neopixel ring
-	#endif
-
-	#if defined(MEASURE_BATTERY_VOLTAGE) || defined(MEASURE_BATTERY_MAX17055)
-		#define BATTERY_MEASURE_ENABLE                 // Don't change. Set automatically if any method of battery monitoring is selected.
-		constexpr uint8_t s_batteryCheckInterval = 10; // How often battery is measured (in minutes) (can be changed via GUI!)
+		#define CHIPSET					WS2812B     	// type of Neopixel: WS2812, WS2812B, WS2813, WS2815, SK6812 or NEOPIXEL (others, e.g. WS2811/APA102, are not supported)
+		#define COLOR_ORDER				GRB         	// RGB, RBG, GRB, GBR, BRG or BGR
 	#endif
 
 	#ifdef MEASURE_BATTERY_VOLTAGE
+		#define BATTERY_MEASURE_ENABLE                 // Don't change. Set automatically if any method of battery monitoring is selected.
+		constexpr uint8_t s_batteryCheckInterval = 10; // How often battery is measured (in minutes) (can be changed via GUI!)
+
 		// (optional) Default-voltages for battery-monitoring via Neopixel; can be changed later via WebGUI
+		// [custom] Kept at the values this box has always used (LiPo range, pre-v3 defaults). Upstream switched its
+		// defaults to LiFePO4 (3.0 / 2.9 / 2.9 / 3.3). Only relevant for an empty NVS; existing values in NVS win.
 		constexpr float s_warningLowVoltage = 3.4;                      // If battery-voltage is <= this value, a cyclic warning will be indicated by Neopixel (can be changed via GUI!)
-		constexpr float s_warningCriticalVoltage = 3.1;                 // If battery-voltage is <= this value, assume battery near-empty. Set to 0V to disable.
+		constexpr float s_warningCriticalVoltage = 3.1;                 // If battery-voltage is <= this value, assume battery near-empty. Whether this triggers a shutdown is a separate GUI-toggle (off by default).
 		constexpr float s_voltageIndicatorLow = 3.0;                    // Lower range for Neopixel-voltage-indication (0 leds) (can be changed via GUI!)
 		constexpr float s_voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-voltage-indication (all leds) (can be changed via GUI!)
 	#endif
 
-	#ifdef MEASURE_BATTERY_MAX17055
-		constexpr float s_batteryLow = 15.0;            // low percentage
-		constexpr float s_batteryCritical = 5.0;        // critical percentage
-
-		constexpr uint16_t s_batteryCapacity = 4000;    // design cap of battery (mAh)
-		constexpr uint16_t s_emptyVoltage = 300;        // empty voltage in 10mV
-		constexpr uint16_t s_recoveryVoltage = 360;     // recovery voltage in 10mV
-		constexpr uint8_t  s_batteryChemistry = 0x60;   // 0 = Li-Ion, 0x20 = NCR, 0x60 = LiFePO4
-		constexpr float s_resistSensor = 0.01;          // current sense resistor, currently non-default values might lead to problems
-		constexpr bool s_vCharge = false;                   // true if charge voltage is greater than 4.275V
-	#endif
-
 	// enable I2C if necessary
-	#if defined(RFID_READER_TYPE_MFRC522_I2C) || defined(PORT_EXPANDER_ENABLE) || defined(MEASURE_BATTERY_MAX17055)
+	#if defined(RFID_READER_TYPE_RUNTIME) || defined(PORT_EXPANDER_ENABLE)
 		#define I2C_2_ENABLE
 	#endif
 
@@ -262,51 +217,41 @@
 
 		constexpr uint16_t microphoneLastDetectionDebounce = 1000; // Debounce-interval in ms when plugging in microphone
 
-
-	// Seekmode-configuration
-	constexpr uint8_t jumpOffset = 30;                            // Offset in seconds to jump for commands CMD_SEEK_FORWARDS / CMD_SEEK_BACKWARDS
-
-	// (optional) Topics for MQTT
+	// Topics for MQTT: used to build actual topics in webinterface. So normally there's no need to apply any changes here 
+	// MQTT configuration available via webinterface: https://forum.espuino.de/t/dokumentation-webinterface/2807.
 	#ifdef MQTT_ENABLE
-		constexpr uint16_t mqttRetryInterval = 60;                // Try to reconnect to MQTT-server every (n) seconds if connection is broken
-		constexpr uint8_t mqttMaxRetriesPerInterval = 1;          // Number of retries per time-interval (mqttRetryInterval). mqttRetryInterval 60 / mqttMaxRetriesPerInterval 1 => once every 60s
-		#define DEVICE_HOSTNAME "ESP32-ESPuino"         // Name that is used for MQTT
-		constexpr const char topicSleepCmnd[] = "Cmnd/ESPuino/Sleep";
-		constexpr const char topicSleepState[] = "State/ESPuino/Sleep";
-		constexpr const char topicRfidCmnd[] = "Cmnd/ESPuino/Rfid";
-		constexpr const char topicRfidState[] = "State/ESPuino/Rfid";
-		constexpr const char topicTrackState[] = "State/ESPuino/Track";
-		constexpr const char topicTrackControlCmnd[] = "Cmnd/ESPuino/TrackControl";
-		constexpr const char topicCoverChangedState[] = "State/ESPuino/CoverChanged";
-		constexpr const char topicLoudnessCmnd[] = "Cmnd/ESPuino/Loudness";
-		constexpr const char topicLoudnessState[] = "State/ESPuino/Loudness";
-		constexpr const char topicSleepTimerCmnd[] = "Cmnd/ESPuino/SleepTimer";
-		constexpr const char topicSleepTimerState[] = "State/ESPuino/SleepTimer";
-		constexpr const char topicState[] = "State/ESPuino/State";
-		constexpr const char topicCurrentIPv4IP[] = "State/ESPuino/IPv4";
-		constexpr const char topicLockControlsCmnd[] ="Cmnd/ESPuino/LockControls";
-		constexpr const char topicLockControlsState[] ="State/ESPuino/LockControls";
-		constexpr const char topicPlaymodeState[] = "State/ESPuino/Playmode";
-		constexpr const char topicRepeatModeCmnd[] = "Cmnd/ESPuino/RepeatMode";
-		constexpr const char topicRepeatModeState[] = "State/ESPuino/RepeatMode";
-		constexpr const char topicLedBrightnessCmnd[] = "Cmnd/ESPuino/LedBrightness";
-		constexpr const char topicLedBrightnessState[] = "State/ESPuino/LedBrightness";
-		constexpr const char topicWiFiRssiState[] = "State/ESPuino/WifiRssi";
-		constexpr const char topicSRevisionState[] = "State/ESPuino/SoftwareRevision";
+		constexpr const char base_topic[] = "";
+		constexpr const char device_id[] = "ESPuino-<MAC>";        // Name that is used for MQTT
+		constexpr const char setter_token[] = "set";        		// Word to identify command-topics
+		// Topics (settable)
+		constexpr const char topicSleep[] = "sleep";           // Cmnd/State: power off (Cmnd '0' or 'OFF' to shutdown), State: ON/OFF
+		constexpr const char topicRfid[] = "rfid";            // Cmnd/State: emulate an RFID tag (Cmnd: 12-digit id), State: current RFID tag id
+		constexpr const char topicTrackControl[] = "trackcontrol"; // Cmnd: playback control (1=stop,3=play/pause,4=next,5=prev,6=first,7=last,8=next folder,9=prev folder)
+		constexpr const char topicLoudness[] = "loudness";    // Cmnd/State: set / report volume (numeric)
+		constexpr const char topicSleepTimer[] = "sleep_timer"; // Cmnd/State: sleep timer commands (EOP/EOT/EO5T, minutes, or 0 to deactivate)
+		constexpr const char topicSleepTimerState[] = "sleep_timer_state"; // State: JSON {mode,remainingMinutes,remainingTracks}; mode = OFF/MINUTES/EOT/EOP/EO5T
+		constexpr const char topicLockControls[] ="lock_controls"; // Cmnd/State: lock or unlock physical controls (ON/OFF)
+		constexpr const char topicRepeatMode[] = "repeatmode"; // Cmnd/State: set repeat mode (0=no,1=track,2=playlist,3=both)
+		constexpr const char topicLedBrightness[] = "led_brightness"; // Cmnd/State: set LED brightness 0..255
+		constexpr const char topicAmbientLight[] = "ambient_light"; // Cmnd/State: set ambient light (ON/OFF)
+
+		// Topics (state only)
+		constexpr const char topicTrack[] = "track";          // State: current track info (e.g. "(2/10) /mp3/.../file.mp3")
+		constexpr const char topicCoverChanged[] = "cover_changed"; // State: indicates cover image may have changed
+		constexpr const char topicState[] = "state";         // State: 'Online' when powering on, 'Offline' when powering off
+		constexpr const char topicCurrentIPv4IP[] = "ipv4";  // State: sends current IPv4 address
+		constexpr const char topicPausePlay[] = "pauseplay"; // State: playback state: 'idle', 'play', 'pause'
+		constexpr const char topicPlaymode[] = "playmode";  // State: numeric playmode
+		constexpr const char topicWiFiRssi[] = "wifi_rssi"; // State: WiFi signal strength (dBm)
+		constexpr const char topicSRevision[] = "software_revision"; // State: software revision string
 		#ifdef BATTERY_MEASURE_ENABLE
-		constexpr const char topicBatteryVoltage[] = "State/ESPuino/Voltage";
-		constexpr const char topicBatterySOC[]     = "State/ESPuino/Battery";
+		constexpr const char topicBatteryVoltage[] = "battery_voltage"; // State: battery voltage float (e.g. 3.81)
+		constexpr const char topicBatterySOC[]     = "battery_soc"; // State: battery charge percent (e.g. 83.0)
 		#endif
 	#endif
 
 	// !!! MAKE SURE TO EDIT PLATFORM SPECIFIC settings-****.h !!!
-	#if (HAL == 1)
-		#include "settings-lolin32.h"                       // Contains all user-relevant settings for Wemos Lolin32
-	#elif (HAL == 2)
-		#include "settings-espa1s.h"                        // Contains all user-relevant settings for ESP32-A1S Audiokit
-	#elif (HAL == 3)
-		#include "settings-lolin_d32.h"                     // Contains all user-relevant settings for Wemos Lolin D32
-	#elif (HAL == 4)
+	#if (HAL == 4)
 		#include "settings-lolin_d32_pro.h"                 // Contains all user-relevant settings for Wemos Lolin D32 pro
 	#elif (HAL == 5)
 		#include "settings-ttgo_t8.h"                       // Contains all user-relevant settings for Lilygo TTGO T8 1.7
@@ -314,10 +259,6 @@
 		#include "settings-complete.h"                      // Contains all user-relevant settings for ESPuino complete
 	#elif (HAL == 7)
 		#include "settings-lolin_d32_pro_sdmmc_pe.h"        // Pre-configured settings for ESPuino Lolin D32 pro with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
-	#elif (HAL == 8)
-		#include "settings-azdelivery_sdmmc.h"              // Pre-configured settings for AZ Delivery ESP32 NodeMCU / Devkit C (https://forum.espuino.de/t/az-delivery-esp32-nodemcu-devkit-c-mit-sd-mmc-und-pn5180-als-rfid-leser/634)
-	#elif (HAL == 9)
-		#include "settings-lolin_d32_sdmmc_pe.h"            // Pre-configured settings for Lolin D32 (non-pro) with SDMMC + port-expander (https://forum.espuino.de/t/espuino-minid32-pro-lolin-d32-pro-mit-sd-mmc-und-port-expander-smd/866)
 	#elif (HAL == 99)
 		#include "settings-custom.h"                        // Contains all user-relevant settings custom-board
 	#endif

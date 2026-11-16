@@ -47,8 +47,19 @@ void Ftp_Init(void) {
 		Log_Println(wroteFtpPwdToNvs, LOGLEVEL_ERROR);
 	} else {
 		Ftp_Password = nvsFtpPassword;
-		Log_Printf(LOGLEVEL_INFO, restoredFtpPwdFromNvs, nvsFtpPassword.c_str());
+		Log_Println(restoredFtpPwdFromNvs, LOGLEVEL_INFO);
 	}
+}
+
+void Ftp_Exit(void) {
+#ifdef FTP_ENABLE
+	if (ftpEnableCurrentStatus) {
+		delete ftpSrv;
+		ftpSrv = NULL;
+		ftpEnableCurrentStatus = false;
+		ftpEnableLastStatus = false;
+	}
+#endif
 }
 
 void Ftp_Cyclic(void) {

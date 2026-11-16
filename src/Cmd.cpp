@@ -14,18 +14,20 @@
 #include "System.h"
 #include "Wlan.h"
 
+#include <algorithm>
+
 static void Cmd_HandleSleepAction(bool enable, const char *enLogMsg, const char *enMqttMsg) {
-	Led_SetNightmode(enable);
+	System_SetNightmode(enable);
 	if (enable) {
 		Log_Println(enLogMsg, LOGLEVEL_INFO);
 #ifdef MQTT_ENABLE
-		publishMqtt(topicSleepTimerState, enMqttMsg, false);
+		publishMqtt(topicSleepTimer, enMqttMsg, false);
 #endif
 	} else {
 		System_DisableSleepTimer();
 		Log_Println(modificatorSleepd, LOGLEVEL_INFO);
 #ifdef MQTT_ENABLE
-		publishMqtt(topicSleepTimerState, "0", false);
+		publishMqtt(topicSleepTimer, "0", false);
 #endif
 	}
 }
@@ -37,12 +39,12 @@ void Cmd_Action(const uint16_t mod) {
 			if (System_AreControlsLocked()) {
 				Log_Println(modificatorAllButtonsLocked, LOGLEVEL_NOTICE);
 #ifdef MQTT_ENABLE
-				publishMqtt(topicLockControlsState, "ON", false);
+				publishMqtt(topicLockControls, "ON", false);
 #endif
 			} else {
 				Log_Println(modificatorAllButtonsUnlocked, LOGLEVEL_NOTICE);
 #ifdef MQTT_ENABLE
-				publishMqtt(topicLockControlsState, "OFF", false);
+				publishMqtt(topicLockControls, "OFF", false);
 #endif
 			}
 			System_IndicateOk();
@@ -129,16 +131,20 @@ void Cmd_Action(const uint16_t mod) {
 
 			gPlayProperties.sleepAfterCurrentTrack = false;
 			gPlayProperties.sleepAfterPlaylist = false;
-			gPlayProperties.sleepAfter5Tracks = !gPlayProperties.sleepAfter5Tracks;
 
-			if (gPlayProperties.sleepAfter5Tracks) {
-				if (gPlayProperties.currentTrackNumber + 5 > gPlayProperties.playlist->size()) {
-					// execute a sleep after end of playlist
-					Cmd_Action(CMD_SLEEP_AFTER_END_OF_PLAYLIST);
-					break;
-				}
+			// Drive playUntilTrackNumber -- the only flag AudioPlayer_Loop() actually acts on for
+			// "sleep after N tracks"; the old sleepAfter5Tracks flag was written but never read, so this
+			// modification card never triggered a sleep. Same semantics as the MQTT EO5T command.
+			if (gPlayProperties.playUntilTrackNumber > 0) {
+				gPlayProperties.playUntilTrackNumber = 0; // reapplying the card toggles it off
+			} else if ((gPlayProperties.playlist->size() - 1) >= (gPlayProperties.currentTrackNumber + 5)) {
+				gPlayProperties.playUntilTrackNumber = gPlayProperties.currentTrackNumber + 5;
+			} else {
+				// fewer than 5 tracks left -> fall back to sleep at end of playlist
+				Cmd_Action(CMD_SLEEP_AFTER_END_OF_PLAYLIST);
+				break;
 			}
-			Cmd_HandleSleepAction(gPlayProperties.sleepAfter5Tracks, sleepTimerEO5, "EO5T");
+			Cmd_HandleSleepAction(gPlayProperties.playUntilTrackNumber > 0, sleepTimerEO5, "EO5T");
 			System_IndicateOk();
 			break;
 		}
@@ -155,7 +161,7 @@ void Cmd_Action(const uint16_t mod) {
 				}
 				gPlayProperties.repeatPlaylist = !gPlayProperties.repeatPlaylist;
 #ifdef MQTT_ENABLE
-				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+				publishMqtt(topicRepeatMode, static_cast<uint32_t>(AudioPlayer_GetRepeatMode()), false);
 #endif
 				System_IndicateOk();
 			}
@@ -174,7 +180,7 @@ void Cmd_Action(const uint16_t mod) {
 				}
 				gPlayProperties.repeatCurrentTrack = !gPlayProperties.repeatCurrentTrack;
 #ifdef MQTT_ENABLE
-				publishMqtt(topicRepeatModeState, AudioPlayer_GetRepeatMode(), false);
+				publishMqtt(topicRepeatMode, static_cast<uint32_t>(AudioPlayer_GetRepeatMode()), false);
 #endif
 				System_IndicateOk();
 			}
@@ -182,8 +188,13 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_DIMM_LEDS_NIGHTMODE: {
-			Led_ToggleNightmode();
+			System_ToggleNightmode();
 			System_IndicateOk();
+			break;
+		}
+
+		case CMD_TOGGLE_AMBIENT_LIGHT: {
+			Led_ToggleAmbientLight();
 			break;
 		}
 
@@ -276,7 +287,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_PLAYPAUSE: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-				AudioPlayer_TrackControlToQueueSender(PAUSEPLAY);
+				AudioPlayer_SetTrackControl(PAUSEPLAY);
 			} else {
 				Bluetooth_PlayPauseTrack();
 			}
@@ -285,7 +296,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_PAUSE: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-					AudioPlayer_TrackControlToQueueSender(PAUSE);
+				AudioPlayer_SetTrackControl(PAUSE);
 			} else {
 				Bluetooth_PauseTrack();
 			}
@@ -294,7 +305,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_PREVTRACK: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-				AudioPlayer_TrackControlToQueueSender(PREVIOUSTRACK);
+				AudioPlayer_SetTrackControl(PREVIOUSTRACK);
 			} else {
 				Bluetooth_PreviousTrack();
 			}
@@ -303,7 +314,7 @@ void Cmd_Action(const uint16_t mod) {
 
 		case CMD_NEXTTRACK: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-				AudioPlayer_TrackControlToQueueSender(NEXTTRACK);
+				AudioPlayer_SetTrackControl(NEXTTRACK);
 			} else {
 				Bluetooth_NextTrack();
 			}
@@ -311,34 +322,44 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_FIRSTTRACK: {
-			AudioPlayer_TrackControlToQueueSender(FIRSTTRACK);
+			AudioPlayer_SetTrackControl(FIRSTTRACK);
 			break;
 		}
 
 		case CMD_LASTTRACK: {
-			AudioPlayer_TrackControlToQueueSender(LASTTRACK);
+			AudioPlayer_SetTrackControl(LASTTRACK);
+			break;
+		}
+
+		case CMD_NEXTFOLDER: {
+			AudioPlayer_SetTrackControl(NEXTFOLDER);
+			break;
+		}
+
+		case CMD_PREVFOLDER: {
+			AudioPlayer_SetTrackControl(PREVIOUSFOLDER);
 			break;
 		}
 
 		case CMD_VOLUMEINIT: {
-			AudioPlayer_VolumeToQueueSender(AudioPlayer_GetInitVolume(), true);
+			AudioPlayer_SetVolume(AudioPlayer_GetInitVolume());
 			break;
 		}
 
 		case CMD_VOLUMEUP: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-				AudioPlayer_VolumeToQueueSender(AudioPlayer_GetCurrentVolume() + 1, true);
+				AudioPlayer_SetVolume(AudioPlayer_GetCurrentVolume() + 1);
 			} else {
-				Bluetooth_SetVolume(AudioPlayer_GetCurrentVolume() + 1, true);
+				Bluetooth_SetVolume(Bluetooth_GetCurrentVolume() + 1);
 			}
 			break;
 		}
 
 		case CMD_VOLUMEDOWN: {
 			if ((OPMODE_NORMAL == System_GetOperationMode()) || (OPMODE_BLUETOOTH_SOURCE == System_GetOperationMode())) {
-				AudioPlayer_VolumeToQueueSender(AudioPlayer_GetCurrentVolume() - 1, true);
+				AudioPlayer_SetVolume(AudioPlayer_GetCurrentVolume() - 1);
 			} else {
-				Bluetooth_SetVolume(AudioPlayer_GetCurrentVolume() - 1, true);
+				Bluetooth_SetVolume(Bluetooth_GetCurrentVolume() - 1);
 			}
 			break;
 		}
@@ -363,17 +384,41 @@ void Cmd_Action(const uint16_t mod) {
 		}
 
 		case CMD_SEEK_FORWARDS: {
-			gPlayProperties.seekmode = SEEK_FORWARDS;
+			// Accumulate rather than set a flag: the flag was a single overwrite-able enum consumed once per
+			// audio-loop iteration, so N detents of a fast rotary spin collapsed into a single jump.
+			// Read per use (like rotSeekStep in RotaryEncoder.cpp) so a change in the web UI applies at once.
+			AudioPlayer_AddSeekOffset(static_cast<int16_t>(gPrefsSettings.getUChar("jumpOffset", SEEK_STEP_BUTTON_DEFAULT)));
 			break;
 		}
 
 		case CMD_SEEK_BACKWARDS: {
-			gPlayProperties.seekmode = SEEK_BACKWARDS;
+			AudioPlayer_AddSeekOffset(-static_cast<int16_t>(gPrefsSettings.getUChar("jumpOffset", SEEK_STEP_BUTTON_DEFAULT)));
+			break;
+		}
+
+		case CMD_SEEK_PREVIEW: {
+			// Rotary-gesture-only: RotaryEncoder.cpp intercepts this command directly (it needs the raw,
+			// bidirectional detent delta to move a preview target, not a single fire-and-forget action) and
+			// never dispatches it here. This case only exists so an unexpected direct dispatch (e.g. a
+			// misconfigured short/long-press assignment) is a silent no-op instead of falling into "unknown
+			// command" below.
+			break;
+		}
+
+		case CMD_BRIGHTNESS_UP:
+		case CMD_BRIGHTNESS_DOWN: {
+			// Led_SetBrightness() takes a uint8_t and does not bounds-check, so clamping is the caller's job:
+			// brightness 2 minus a step would otherwise wrap to ~255 and blast a dark room at full power.
+			const int16_t step = (mod == CMD_BRIGHTNESS_UP) ? LED_BRIGHTNESS_STEP : -static_cast<int16_t>(LED_BRIGHTNESS_STEP);
+			const int16_t target = static_cast<int16_t>(Led_GetBrightness()) + step;
+			Led_SetBrightness(static_cast<uint8_t>(std::clamp<int16_t>(target, LED_BRIGHTNESS_MIN, 255)));
+			Log_Printf(LOGLEVEL_INFO, "LED-brightness: %u", Led_GetBrightness());
 			break;
 		}
 
 		case CMD_STOP: {
-			AudioPlayer_TrackControlToQueueSender(STOP);
+			AudioPlayer_SeekPreviewCancel(); // don't let a stopped track's leftover preview commit onto whatever plays next
+			AudioPlayer_SetTrackControl(STOP);
 			break;
 		}
 

@@ -6,32 +6,38 @@
 #define OPMODE_BLUETOOTH_SOURCE 2 // Bluetooth sourcemode. Player sennds audio to bluetooth speaker/headset. WiFi is deactivated. Music from SD and webstreams can't be played.
 
 // Track-Control
-#define NO_ACTION	  0 // Dummy to unset track-control-command
-#define STOP		  1 // Stop play
-#define PLAY		  2 // Start play (currently not used)
-#define PAUSEPLAY	  3 // Pause/play
-#define NEXTTRACK	  4 // Next track of playlist
-#define PREVIOUSTRACK 5 // Previous track of playlist
-#define FIRSTTRACK	  6 // First track of playlist
-#define LASTTRACK	  7 // Last track of playlist
-#define PAUSE         8 // Pause
+#define NO_ACTION	   0 // Dummy to unset track-control-command
+#define STOP		   1 // Stop play
+#define PLAY		   2 // Start play (currently not used)
+#define PAUSEPLAY	   3 // Pause/play
+#define NEXTTRACK	   4 // Next track of playlist
+#define PREVIOUSTRACK  5 // Previous track of playlist
+#define FIRSTTRACK	   6 // First track of playlist
+#define LASTTRACK	   7 // Last track of playlist
+#define NEXTFOLDER	   8 // Next folder (recursive mode only)
+#define PREVIOUSFOLDER 9 // Previous folder (recursive mode only)
+#define PAUSE		   20 // [custom] Pause only (never resumes, unlike PAUSEPLAY). Kept away from upstream's consecutive numbering to survive future merges
 
 // Playmodes
 #define NO_PLAYLIST												  0 // If no playlist is active
 #define SINGLE_TRACK											  1 // Play a single track
 #define SINGLE_TRACK_LOOP										  2 // Play a single track in infinite-loop
 #define SINGLE_TRACK_OF_DIR_RANDOM								  12 // Play a single track of a directory and fall asleep subsequently
-#define AUDIOBOOK												  3 // Single track, can save last play-position
-#define AUDIOBOOK_LOOP											  4 // Single track as infinite-loop, can save last play-position
+#define AUDIOBOOK												  3 // Single track or tracks of single folder, can save last play-position
+#define AUDIOBOOK_LOOP											  4 // Single track or tracks of single folder as infinite-loop, can save last play-position
+#define AUDIOBOOK_RECURSIVE										  16 // Single track or track of single folder or folder recursive, can save last play-position
 #define ALL_TRACKS_OF_DIR_SORTED								  5 // Play all files of a directory (sorted)
 #define ALL_TRACKS_OF_DIR_RANDOM								  6 // Play all files of a directory (randomized)
+#define ALL_TRACKS_OF_DIR_RANDOM_RECURSIVE						  17 // Play all files of a directory and subdirectories (randomized)
 #define ALL_TRACKS_OF_DIR_SORTED_LOOP							  7 // Play all files of a directory (sorted) in infinite-loop
 #define ALL_TRACKS_OF_DIR_RANDOM_LOOP							  9 // Play all files of a directory (randomized) in infinite-loop
+#define ALL_TRACKS_OF_DIR_SORTED_RECURSIVE						  15 // Like AUDIOBOOK_RECURSIVE, but without saving last play-position
 #define RANDOM_SUBDIRECTORY_OF_DIRECTORY						  13 // Picks a random subdirectory from a given directory and do ALL_TRACKS_OF_DIR_SORTED
 #define RANDOM_SUBDIRECTORY_OF_DIRECTORY_ALL_TRACKS_OF_DIR_RANDOM 14 // Picks a random subdirectory from a given directory and do ALL_TRACKS_OF_DIR_RANDOM
 #define WEBSTREAM												  8 // Play webradio-stream
 #define LOCAL_M3U												  11 // Plays items (webstream or files) with addresses/paths from a local m3u-file
-#define BUSY													  10 // Used if playlist is created
+#define PLAYLIST_BUSY											  10 // Used if playlist is created
+#define MEDIAHUB												  18 // Card is managed by an external MediaHub (see mediahub-konzept.md); real playMode comes from its manifest, not from here
 
 // RFID-modifcation-types
 #define CMD_NOTHING						 0 // Do Nothing
@@ -53,6 +59,9 @@
 #define CMD_ENABLE_FTP_SERVER			 150 // Enables FTP-server
 #define CMD_TELL_IP_ADDRESS				 151 // Command: ESPuino announces its IP-address via speech
 #define CMD_TELL_CURRENT_TIME			 152 // Command: ESPuino announces current time via speech
+#define CMD_TOGGLE_AMBIENT_LIGHT		 153 // Command: toggles the ambient light
+#define CMD_BRIGHTNESS_UP				 154 // Command: raise LED-brightness by one step
+#define CMD_BRIGHTNESS_DOWN				 155 // Command: lower LED-brightness by one step
 
 #define CMD_PLAYPAUSE	   170 // Command: play/pause
 #define CMD_PREVTRACK	   171 // Command: previous track
@@ -64,11 +73,14 @@
 #define CMD_VOLUMEDOWN	   177 // Command: lower volume by 1
 #define CMD_MEASUREBATTERY 178 // Command: Measure battery-voltage
 #define CMD_SLEEPMODE	   179 // Command: Go to deepsleep
-#define CMD_SEEK_FORWARDS  180 // Command: jump forwards (time period to jump (in seconds) is configured via settings.h: jumpOffset)
-#define CMD_SEEK_BACKWARDS 181 // Command: jump backwards (time period to jump (in seconds) is configured via settings.h: jumpOffset)
+#define CMD_SEEK_FORWARDS  180 // Command: jump forwards (seconds per press: web interface, NVS "jumpOffset")
+#define CMD_SEEK_BACKWARDS 181 // Command: jump backwards (seconds per press: web interface, NVS "jumpOffset")
 #define CMD_STOP		   182 // Command: stops playback
 #define CMD_RESTARTSYSTEM  183 // Command: restart System
-#define CMD_PAUSE          184 // Command: pause
+#define CMD_NEXTFOLDER	   184 // Command: jump forwards to next folder (only applicable for recursive playmodes)
+#define CMD_PREVFOLDER	   185 // Command: jump forwards to previous folder (only applicable for recursive playmodes)
+#define CMD_SEEK_PREVIEW   186 // Command: rotary-gesture-only. Turning previews a target position (LED cursor); commits on release/idle instead of jumping immediately
+#define CMD_PAUSE		   230 // [custom] Command: pause only (never resumes). Was 184 before the merge with upstream v3.2, which now uses 184-186 itself
 
 #define CMD_VIRTUAL_RFID_CARD_01 241 // Command: Virtual RFID-Card 900000000001
 #define CMD_VIRTUAL_RFID_CARD_02 242 // Command: Virtual RFID-Card 900000000002
@@ -80,6 +92,14 @@
 #define CMD_VIRTUAL_RFID_CARD_08 248 // Command: Virtual RFID-Card 900000000008
 #define CMD_VIRTUAL_RFID_CARD_09 249 // Command: Virtual RFID-Card 900000000009
 #define CMD_VIRTUAL_RFID_CARD_10 250 // Command: Virtual RFID-Card 900000000010
+
+// Seek step sizes (seconds). These are internal defaults only: they seed the matching
+// web-interface settings before their first save and are read from NVS afterwards.
+// Change the values in the web interface, not here.
+#define SEEK_STEP_BUTTON_DEFAULT 30 // NVS "jumpOffset":  per press of CMD_SEEK_FORWARDS / CMD_SEEK_BACKWARDS
+#define SEEK_STEP_ROTARY_DEFAULT 10 // NVS "rotSeekStep": per encoder detent when a turn action is mapped to seek.
+									// Deliberately smaller than the button step: a flick of the encoder is many
+									// detents at once, so reusing the button step there would scrub minutes.
 
 // Repeat-Modes
 #define NO_REPEAT		 0 // No repeat

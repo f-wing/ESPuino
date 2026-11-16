@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
   title: ESPuino API
-  version: 1.0.5
+  version: 1.1.0
   description: >-
     API for the ESPuino, a DIY Smart Speaker project. ESPuino is a DIY Smart
     Speaker that uses software-based audio decoding, supports various music
@@ -10,7 +10,7 @@ info:
 servers:
   - url: /
     description: Local Device
-  - url: 'http://espuino.local/'
+  - url: "http://espuino.local/"
     description: Development ESPuino
 paths:
   /explorer:
@@ -25,7 +25,7 @@ paths:
             default: /
           description: Path to the directory to be listed.
       responses:
-        '200':
+        "200":
           description: Directory content successfully listed.
           content:
             application/json:
@@ -42,26 +42,25 @@ paths:
                         True if item is a directory. This parameter is omitted
                         for a file.
     post:
-      summary: Upload a file to a directory.
-      description: Upload a file to the specified directory.
+      summary: Upload a file.
+      description: >-
+        Uploads a single file, given as a raw binary body (not multipart/
+        form-data). To upload several files, send one request per file.
       parameters:
         - in: query
           name: path
           schema:
             type: string
-          description: Directory path to upload the file.
+          description: Full target path, including the filename, to upload the file to.
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/octet-stream:
             schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
+              type: string
+              format: binary
       responses:
-        '200':
+        "200":
           description: File successfully uploaded.
     delete:
       summary: Delete a file or directory.
@@ -73,7 +72,7 @@ paths:
             type: string
           description: Path to the file or directory to be deleted.
       responses:
-        '200':
+        "200":
           description: File or directory successfully deleted.
     put:
       summary: Create a new directory.
@@ -85,7 +84,7 @@ paths:
             type: string
           description: Path for the new directory to be created.
       responses:
-        '200':
+        "200":
           description: Directory successfully created.
     patch:
       summary: Rename a file.
@@ -102,7 +101,7 @@ paths:
             type: string
           description: New path for the file.
       responses:
-        '200':
+        "200":
           description: File successfully renamed.
   /exploreraudio:
     post:
@@ -120,7 +119,7 @@ paths:
             type: string
           description: Play mode for audio.
       responses:
-        '200':
+        "200":
           description: Successful audio play.
           content:
             application/json:
@@ -140,14 +139,14 @@ paths:
             type: string
           description: Path of the file to download.
       responses:
-        '200':
+        "200":
           description: Successful download.
   /savedSSIDs:
     get:
       summary: Get a list of saved networks.
       description: Get a list of saved Wi-Fi networks.
       responses:
-        '200':
+        "200":
           description: Successful response with saved networks.
           content:
             application/json:
@@ -186,7 +185,7 @@ paths:
                 - SSID
                 - pwd
       responses:
-        '200':
+        "200":
           description: Successful network save.
     delete:
       summary: Delete a saved network.
@@ -198,14 +197,14 @@ paths:
             type: string
           description: SSID of the network to delete.
       responses:
-        '200':
+        "200":
           description: Successful network deletion.
   /activeSSID:
     get:
       summary: Get the current active network name.
       description: Get the SSID of the currently active network.
       responses:
-        '200':
+        "200":
           description: Successful response with active network name.
           content:
             application/json:
@@ -214,9 +213,11 @@ paths:
   /wificonfig:
     get:
       summary: Get current common Wi-Fi configuration.
-      description: Get the current common Wi-Fi configuration settings.
+      description: >-
+        Get the current common Wi-Fi configuration settings. The access-point password is never
+        returned; apPasswordSet only tells whether one is stored.
       responses:
-        '200':
+        "200":
           description: Successful response with Wi-Fi configuration.
           content:
             application/json:
@@ -225,11 +226,26 @@ paths:
                 properties:
                   hostname:
                     type: string
-                  ScanWiFiOnStart:
+                  maxHostnameLength:
+                    type: integer
+                    description: Maximum length of the hostname.
+                  scanOnStart:
                     type: boolean
+                    description: Always scan for Wi-Fi networks on startup.
+                  apSSID:
+                    type: string
+                    description: SSID of the access point ESPuino opens when no known Wi-Fi is available.
+                  apPasswordSet:
+                    type: boolean
+                    description: Whether an access-point password is stored (false = open access point).
+                  apTimeout:
+                    type: integer
+                    description: Minutes the access point stays open; 0 = never close automatically.
     post:
       summary: Save current common Wi-Fi configuration.
-      description: Save the current common Wi-Fi configuration settings.
+      description: >-
+        Save the common Wi-Fi configuration settings. Every field is optional: a field left out keeps
+        its stored value.
       requestBody:
         description: Common Wi-Fi configuration to save.
         required: true
@@ -240,18 +256,88 @@ paths:
               properties:
                 hostname:
                   type: string
-                ScanWiFiOnStart:
+                  description: 2-32 characters, letters, digits and '-', not starting or ending with '-'.
+                scanOnStart:
                   type: boolean
-              required:
-                - hostname
-                - ScanWiFiOnStart
+                apSSID:
+                  type: string
+                  minLength: 1
+                  maxLength: 32
+                apPassword:
+                  type: string
+                  writeOnly: true
+                  description: >-
+                    Write-only. Leave out to keep the stored password, send "" to remove it (open
+                    access point), otherwise 8-63 characters.
+                apTimeout:
+                  type: integer
+                  description: Minutes the access point stays open; 0 = never close automatically.
       responses:
-        '200':
-          description: Successful Wi-Fi configuration save.
+        "200":
+          description: Successful Wi-Fi configuration save. The body holds the hostname.
+          content:
+            text/plain:
+              schema:
+                type: string
+        "400":
+          description: A field failed validation (hostname, apSSID or apPassword); the body says which.
+        "500":
+          description: The configuration could not be stored.
+  /mode:
+    get:
+      summary: Get current operation mode.
+      description: Get the current operation mode of the device (Normal, Bluetooth Sink, or Bluetooth Source).
+      responses:
+        "200":
+          description: Successful response with current operation mode.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode:
+                    type: integer
+                    description: >-
+                      Operation mode: 0 = Normal, 1 = Bluetooth Sink, 2 = Bluetooth Source
+                    enum:
+                      - 0
+                      - 1
+                      - 2
+    post:
+      summary: Set operation mode.
+      description: >-
+        Set the operation mode of the device. The device will restart immediately after receiving this request.
+        Note: The HTTP response may not be received as the device restarts before sending it.
+        The client should display a restart notification immediately after sending this request.
+      requestBody:
+        description: Operation mode to set.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: integer
+                  description: >-
+                    Operation mode: 0 = Normal, 1 = Bluetooth Sink, 2 = Bluetooth Source
+                  enum:
+                    - 0
+                    - 1
+                    - 2
+              required:
+                - mode
+      responses:
+        "200":
+          description: Operation mode change accepted (device restarts immediately - response may not be received).
+        "400":
+          description: Bad request - missing or invalid 'mode' parameter.
   /settings:
     get:
       summary: Get common settings.
-      description: 'Get common settings, optionally for a specific section.'
+      description: >-
+        Get common settings, optionally for a specific section. Stored passwords are never returned:
+        passwordSet and apPasswordSet only tell whether one is stored.
       parameters:
         - in: query
           name: section
@@ -259,18 +345,83 @@ paths:
             type: string
           description: Optional section to retrieve specific settings.
       responses:
-        '200':
+        "200":
           description: Successful response with common settings.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  # Include your common settings properties here.
-                  null
+                  # The remaining sections (general, led, battery, ...) are not documented here yet.
+                  wifi:
+                    type: object
+                    properties:
+                      hostname:
+                        type: string
+                      maxHostnameLength:
+                        type: integer
+                      scanOnStart:
+                        type: boolean
+                      apSSID:
+                        type: string
+                      apPasswordSet:
+                        type: boolean
+                        description: Whether an access-point password is stored (false = open access point).
+                      apTimeout:
+                        type: integer
+                  ftp:
+                    type: object
+                    description: Only present if the firmware was built with FTP support.
+                    properties:
+                      username:
+                        type: string
+                      passwordSet:
+                        type: boolean
+                        description: Whether an FTP password is stored.
+                      maxUserLength:
+                        type: integer
+                      maxPwdLength:
+                        type: integer
+                  mqtt:
+                    type: object
+                    description: Only present if the firmware was built with MQTT support.
+                    properties:
+                      enable:
+                        type: boolean
+                      macAddressPlain:
+                        type: string
+                        description: MAC address without colons, upper case.
+                      clientID:
+                        type: string
+                      deviceId:
+                        type: string
+                      baseTopic:
+                        type: string
+                      server:
+                        type: string
+                      port:
+                        type: integer
+                      username:
+                        type: string
+                      passwordSet:
+                        type: boolean
+                        description: Whether an MQTT password is stored.
+                      maxUserLength:
+                        type: integer
+                      maxPwdLength:
+                        type: integer
+                      maxClientIdLength:
+                        type: integer
+                      maxServerLength:
+                        type: integer
+                      maxBaseTopicLength:
+                        type: integer
+                      maxDeviceIdLength:
+                        type: integer
     post:
       summary: Save settings.
-      description: Save common settings.
+      description: >-
+        Save common settings. Every section is optional; send only the ones to change.
       requestBody:
         description: Settings to save.
         required: true
@@ -287,7 +438,12 @@ paths:
                   # Include all defaults settings properties here
                 wifi:
                   type: object
-                  # Include all Wi-Fi settings properties here
+                  description: The access-point settings are saved through /wificonfig.
+                  properties:
+                    hostname:
+                      type: string
+                    scanOnStart:
+                      type: boolean
                 led:
                   type: object
                   # Include all LED settings properties here
@@ -296,18 +452,59 @@ paths:
                   # Include all battery settings properties here
                 ftp:
                   type: object
-                  # Include all FTP settings properties here
+                  properties:
+                    username:
+                      type: string
+                    password:
+                      type: string
+                      writeOnly: true
+                      description: >-
+                        Write-only. Leave out to keep the stored password, otherwise it is replaced.
+                  required:
+                    - username
                 mqtt:
                   type: object
-                  # Include all MQTT settings properties here
+                  properties:
+                    enable:
+                      type: integer
+                      description: 1 = enabled, 0 = disabled.
+                    clientID:
+                      type: string
+                    deviceId:
+                      type: string
+                      description: Must not be empty and must not contain '/'.
+                    baseTopic:
+                      type: string
+                    server:
+                      type: string
+                    port:
+                      type: integer
+                    username:
+                      type: string
+                    password:
+                      type: string
+                      writeOnly: true
+                      description: >-
+                        Write-only. Leave out to keep the stored password, send "" to remove it,
+                        otherwise it is replaced. The stored password only stays with the server and
+                        username it was entered for: if either changes, the password has to be sent
+                        again, otherwise the request is refused (500).
+                  required:
+                    - enable
+                    - clientID
+                    - deviceId
+                    - baseTopic
+                    - server
+                    - port
+                    - username
                 bluetooth:
                   type: object
                   # Include all Bluetooth settings properties here
-              required:
-                - general
       responses:
-        '200':
+        "200":
           description: Successful settings save.
+        "500":
+          description: A setting failed validation or could not be stored; the log says which.
   /rfid:
     get:
       summary: List all saved RFID-tag assignments with details.
@@ -321,7 +518,7 @@ paths:
             type: string
           description: Optional ID to list only a single assignment.
       responses:
-        '200':
+        "200":
           description: Successful response with RFID-tag assignments.
           content:
             application/json:
@@ -329,9 +526,8 @@ paths:
                 type: array
                 items:
                   type: object
-                  properties:
-                    # Include your RFID-tag assignment properties here.
-                    null
+                  # Include your RFID-tag assignment properties here.
+                  additionalProperties: true
     post:
       summary: Save or overwrite RFID-tag assignment.
       description: Save a new RFID-tag assignment or overwrite an existing one.
@@ -355,7 +551,7 @@ paths:
                 - id
                 - fileOrUrl
       responses:
-        '200':
+        "200":
           description: Successful RFID-tag assignment save.
     delete:
       summary: Delete an RFID-tag assignment.
@@ -367,14 +563,14 @@ paths:
             type: string
           description: ID of the RFID-tag assignment to delete.
       responses:
-        '200':
+        "200":
           description: Successful RFID-tag assignment deletion.
   /rfid/ids-only:
     get:
       summary: Get an array of RFID tag ID names.
       description: Returns an array of RFID tag IDs without additional details.
       responses:
-        '200':
+        "200":
           description: Successful response with RFID tag IDs.
           content:
             application/json:
@@ -387,33 +583,216 @@ paths:
       summary: Get album cover image.
       description: Handle album cover image requests and serve the current cover art image.
       responses:
-        '200':
+        "200":
           description: Successful response with album cover image.
           content:
             image/jpeg:
               schema:
                 type: string
                 format: binary
-  /info:
+  /logo:
     get:
-      summary: Get common information.
-      description: Returns a JSON object with common information about ESPuino.
+      summary: Get the ESPuino logo.
+      description: >-
+        Serves the logo embedded in the firmware/SD-card (PNG or SVG,
+        whichever is present). Used instead of an external redirect so it
+        still works without internet access, e.g. in AP setup mode.
       responses:
-        '200':
-          description: Successful response with common information.
+        "200":
+          description: Successful response with the logo image.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
+              schema:
+                type: string
+                format: binary
+  /wifistatus:
+    get:
+      summary: Get current Wi-Fi connection status.
+      description: >-
+        Returns the current connection state, the last connection failure (if
+        any), and the state of an in-progress live connection test started via
+        POST /wifitest (used by the AP setup page).
+      responses:
+        "200":
+          description: Successful response with Wi-Fi status.
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  # Include your common information properties here.
-                  null
+                  state:
+                    type: integer
+                    description: Current Wi-Fi connection state.
+                  ssid:
+                    type: string
+                    description: SSID of the currently connected network (only present while connected).
+                  ip:
+                    type: string
+                    description: Current IP address (only present while connected).
+                  last_failure:
+                    type: object
+                    description: Details of the most recent failed connection attempt, if any.
+                    properties:
+                      ssid:
+                        type: string
+                      reason:
+                        type: integer
+                        description: Raw ESP-IDF Wi-Fi disconnect reason code.
+                      class:
+                        type: string
+                        description: >-
+                          Classified reason: wrong_password, not_found,
+                          rejected, timeout, or other.
+                  test:
+                    type: object
+                    description: Present only while a live connection test (POST /wifitest) is in progress or has just finished.
+                    properties:
+                      phase:
+                        type: string
+                        enum:
+                          - connecting
+                          - success
+                          - failed
+                      ssid:
+                        type: string
+                      ip:
+                        type: string
+                        description: Only present when phase is "success".
+                      reason:
+                        type: integer
+                        description: Only present when phase is "failed".
+                      class:
+                        type: string
+                        description: Only present when phase is "failed". Same classification as last_failure.class.
+  /wifitest:
+    post:
+      summary: Start a live Wi-Fi connection test.
+      description: >-
+        Starts testing the given (already-saved via POST /savedSSIDs)
+        network's credentials in the background while staying in AP mode, so
+        the setup page can show success/failure without a save-reboot-hope
+        cycle. Poll GET /wifistatus for the result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ssid:
+                  type: string
+              required:
+                - ssid
+      responses:
+        "200":
+          description: Test started.
+        "400":
+          description: Missing/invalid SSID, or the network isn't saved yet.
+  /bluetoothscan:
+    get:
+      summary: Start a Bluetooth device scan.
+      description: >-
+        Starts scanning for nearby Bluetooth devices. Only available in
+        Bluetooth source mode. Results are retrieved via GET /bluetoothresults.
+      responses:
+        "200":
+          description: Scan started.
+        "400":
+          description: Bluetooth source mode not active, or Bluetooth not enabled in this build.
+  /bluetoothresults:
+    get:
+      summary: Get discovered Bluetooth devices.
+      description: Returns the devices found so far by the scan started via GET /bluetoothscan.
+      responses:
+        "200":
+          description: Successful response with discovered devices.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    address:
+                      type: string
+                      description: "MAC address, formatted as XX:XX:XX:XX:XX:XX."
+                    rssi:
+                      type: integer
+        "400":
+          description: Bluetooth not enabled in this build.
+  /bluetoothstatus:
+    get:
+      summary: Get Bluetooth source connection status.
+      description: >-
+        Returns the current Bluetooth source connection state. When connected,
+        the response also contains the peer MAC address and, when known, its
+        friendly device name.
+      responses:
+        "200":
+          description: Current Bluetooth connection status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - connected
+                properties:
+                  connected:
+                    type: boolean
+                  address:
+                    type: string
+                    description: "Peer MAC address, formatted as XX:XX:XX:XX:XX:XX. Present only when connected."
+                  name:
+                    type: string
+                    description: "Friendly peer name when known. Present only when connected."
+  /bluetoothconnect:
+    post:
+      summary: Connect to a Bluetooth device.
+      description: >-
+        Connects to the Bluetooth device with the given address. Only
+        available in Bluetooth source mode.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                  description: "MAC address, formatted as XX:XX:XX:XX:XX:XX."
+              required:
+                - address
+      responses:
+        "200":
+          description: Connection attempt started.
+        "400":
+          description: Bluetooth source mode not active, or Bluetooth not enabled in this build.
+  /info:
+    get:
+      summary: Get common information.
+      description: Returns a JSON object with common information about ESPuino.
+      responses:
+        "200":
+          description: Successful response with common information.
+          content:
+            application/json:
+              schema:
+                type: object
+                # Include your common information properties here.
+                additionalProperties: true
   /log:
     get:
       summary: Get current log.
       description: Returns the current log as text.
       responses:
-        '200':
+        "200":
           description: Successful response with log text.
           content:
             text/plain:
@@ -424,7 +803,7 @@ paths:
       summary: Get task runtime information.
       description: Returns an HTML webpage with task runtime information.
       responses:
-        '200':
+        "200":
           description: Successful response with task runtime information.
           content:
             text/html:
@@ -435,21 +814,20 @@ paths:
       summary: Get debug information.
       description: Returns task runtime and debug information as JSON.
       responses:
-        '200':
+        "200":
           description: Successful response with debug information.
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  # Include your debug information properties here.
-                  null
+                # Include your debug information properties here.
+                additionalProperties: true
   /upload:
     post:
       summary: Upload NVS backup.
       description: Uploads a NVS backup file.
       responses:
-        '200':
+        "200":
           description: Successful response for NVS backup upload.
       requestBody:
         required: true
@@ -466,7 +844,7 @@ paths:
       summary: Upload new firmware.
       description: Uploads new firmware to ESPuino. Make sure to restart afterwards.
       responses:
-        '200':
+        "200":
           description: Successful response for firmware update.
       requestBody:
         required: true
@@ -483,21 +861,21 @@ paths:
       summary: Restart ESPuino.
       description: Performs a restart of ESPuino. No parameters required.
       responses:
-        '200':
+        "200":
           description: Successful response for ESPuino restart.
   /shutdown:
     post:
       summary: Shutdown ESPuino.
       description: Performs a shutdown (deep-sleep) of ESPuino. No parameters required.
       responses:
-        '200':
+        "200":
           description: Successful response for ESPuino shutdown.
   /rfidnvserase:
     post:
       summary: Erase RFID assignments from NVS.
       description: Erases all RFID assignments from NVS.
       responses:
-        '200':
+        "200":
           description: Successful response for RFID assignments erasure.
   /wifiscan:
     get:
@@ -507,7 +885,7 @@ paths:
         return 0 results unless you start the scan from somewhere else
         (loop/setup). Do not request more often than 3-5 seconds!
       responses:
-        '200':
+        "200":
           description: Successful response with nearby WiFi networks.
           content:
             application/json:
@@ -518,21 +896,20 @@ paths:
   /trackprogress:
     get:
       summary: Get current track progress.
-      description: 'Get current track progress, time, and duration.'
+      description: "Get current track progress, time, and duration."
       responses:
-        '200':
+        "200":
           description: Successful response with track progress information.
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  # Include your track progress information properties here.
-                  null
+                # Include your track progress information properties here.
+                additionalProperties: true
   /inithalleffectsensor:
     get:
       summary: Initialize Hall Effect Sensor Value.
       description: Initializes the Hall Effect Sensor Value.
       responses:
-        '200':
+        "200":
           description: Successful response for initializing Hall Effect Sensor Value.

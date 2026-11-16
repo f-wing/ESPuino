@@ -15,6 +15,7 @@ float warningLowVoltage = s_warningLowVoltage;
 float warningCriticalVoltage = s_warningCriticalVoltage;
 float voltageIndicatorLow = s_voltageIndicatorLow;
 float voltageIndicatorHigh = s_voltageIndicatorHigh;
+float offsetVoltage = s_offsetVoltage;
 
 void Battery_InitInner() {
 	// Get voltages from NVS for Neopixel
@@ -49,6 +50,15 @@ void Battery_InitInner() {
 	} else {
 		gPrefsSettings.putFloat("wCritVoltage", warningCriticalVoltage);
 	}
+
+	// Voltage-measurement correction offset (calibration). Sentinel 999.99 = "not set in NVS yet".
+	float vOffset = gPrefsSettings.getFloat("offsetVoltage", 999.99);
+	if (vOffset <= 999) {
+		offsetVoltage = vOffset;
+		Log_Printf(LOGLEVEL_INFO, offsetVoltageFromNVS, vOffset);
+	} else { // preseed if not set
+		gPrefsSettings.putFloat("offsetVoltage", offsetVoltage);
+	}
 }
 
 void Battery_CyclicInner() {
@@ -57,14 +67,14 @@ void Battery_CyclicInner() {
 
 // The average of several analog reads will be taken to reduce the noise (Note: One analog read takes ~10µs)
 float Battery_GetVoltage(void) {
-	float factor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
+	float resistorDividerFactor = 1 / ((float) rdiv2 / (rdiv2 + rdiv1));
 	float averagedAnalogValue = 0;
 	uint8_t i;
 	for (i = 0; i <= 19; i++) {
-		averagedAnalogValue += (float) analogRead(VOLTAGE_READ_PIN);
+		averagedAnalogValue += (float) analogReadMilliVolts(VOLTAGE_READ_PIN);
 	}
-	averagedAnalogValue /= 20.0f;
-	return (averagedAnalogValue / maxAnalogValue) * referenceVoltage * factor + offsetVoltage;
+	averagedAnalogValue /= 20000.0f; // Calc avg. value of loop and convert mV to V
+	return averagedAnalogValue * resistorDividerFactor + offsetVoltage;
 }
 
 void Battery_PublishMQTT() {

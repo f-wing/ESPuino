@@ -18,6 +18,7 @@ enum class LedAnimationType {
 	Error,
 	Ok,
 	VoltageWarning,
+	Download, // MediaHub file sync (concept §12): outranks normal playback feedback, since it runs before playback even starts
 	Volume,
 	BatteryMeasurement,
 	Rewind,
@@ -58,9 +59,48 @@ struct AnimationReturnType {
 		, animationRefresh(refresh) { }
 };
 
+// Step and floor for the CMD_BRIGHTNESS_UP/DOWN command. Defined unconditionally (not under
+// NEOPIXEL_ENABLE) because Cmd.cpp dispatches that command regardless of whether LEDs are compiled in
+// -- Led_SetBrightness()/Led_GetBrightness() are always defined and simply no-op without NEOPIXEL, so
+// referencing these constants there must compile too. See issue #453.
+#define LED_BRIGHTNESS_STEP 4u // Brightness change per rotary detent (CMD_BRIGHTNESS_UP/DOWN)
+#define LED_BRIGHTNESS_MIN	1u // Never let a gesture turn the LEDs fully off -- that looks like a crash
+
+#ifdef NEOPIXEL_ENABLE
+	#define LED_INITIAL_BRIGHTNESS		 16u
+	#define LED_INITIAL_NIGHT_BRIGHTNESS 2u
+
+	#include "LedDriver.h"
+
+struct LedSettings {
+	uint8_t numIndicatorLeds = 24;
+	uint8_t numControlLeds = 0;
+	std::vector<uint32_t> controlLedColors;
+	uint8_t numIdleDots = 4;
+	bool offsetLedPause = false;
+	bool indicateRfidTag = false;
+	int16_t progressHueStart = 85;
+	int16_t progressHueEnd = -1;
+	int16_t atmoHue = 10;
+	int16_t atmoSaturation = 180;
+	uint8_t dimmableStates = 50;
+	bool neopixelReverseRotation;
+	uint8_t ledOffset;
+	bool Led_Pause = false; // Used to pause Neopixel-signalisation (while NVS-writes as this leads to exceptions; don't know why)
+	bool Led_AmbientLight = false;
+	uint8_t Led_InitialBrightness = LED_INITIAL_BRIGHTNESS;
+	uint8_t Led_Brightness = LED_INITIAL_BRIGHTNESS;
+	uint8_t Led_NightBrightness = LED_INITIAL_NIGHT_BRIGHTNESS;
+	uint8_t Led_AmbientBrightness = LED_INITIAL_BRIGHTNESS;
+};
+#endif
+
 void Led_Init(void);
 void Led_Exit(void);
 void Led_Indicate(LedIndicatorType value);
+// Acknowledges an accepted RFID tag by flashing all LEDs, if the user asked for that feedback.
+// Checks the setting itself, so callers don't have to.
+void Led_IndicateRfidTagAccepted(void);
 void Led_SetPause(boolean value);
 void Led_ResetToInitialBrightness(void);
 void Led_ResetToNightBrightness(void);
@@ -68,7 +108,13 @@ uint8_t Led_GetBrightness(void);
 void Led_SetBrightness(uint8_t value);
 void Led_TaskPause(void);
 void Led_TaskResume(void);
+void Led_ShowOtaProgress(uint8_t percent);
+void Led_SetDownloadProgress(bool active, uint8_t percent = 0);
 
-void Led_SetNightmode(bool enabled);
-bool Led_GetNightmode();
-void Led_ToggleNightmode();
+// Applies or reverts the night-mode brightness. The night-mode state itself is owned by System.cpp
+// (System_SetNightmode()), which holds the flag and the idempotence check -- so this is only ever
+// called on an actual state change and must not be called directly.
+void Led_ApplyNightmode(bool enabled);
+void Led_SetAmbientLight(bool enabled);
+bool Led_GetAmbientLight();
+void Led_ToggleAmbientLight();
