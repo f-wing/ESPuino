@@ -73,7 +73,6 @@ static void System_SeedFormerCompileTimeSettings(void) {
 	static constexpr BoolSeed boolSeeds[] = {
 		{"ledReverseRot", true}, // was: #define NEOPIXEL_REVERSE_ROTATION
 		{"playMono", true}, // was: #define PLAY_MONO_SPEAKER
-		{"shutdownBatCrit", true}, // was: #define SHUTDOWN_ON_BAT_CRITICAL
 		{"recoverVolBoot", true}, // was: #define USE_LAST_VOLUME_AFTER_REBOOT
 		{"pauseRfidRem", true}, // was: #define PAUSE_WHEN_RFID_REMOVED
 	};
@@ -83,6 +82,10 @@ static void System_SeedFormerCompileTimeSettings(void) {
 			Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", seed.key, seed.value);
 		}
 	}
+	// Not seeded on purpose: "shutdownBatCrit" (was: #define SHUTDOWN_ON_BAT_CRITICAL). With it, a reading below the
+	// critical threshold sends the box to deep sleep during boot, before the web interface is up. As the voltage
+	// correction has to be re-calibrated after this update (see s_offsetVoltage), an uncalibrated reading could lock
+	// the box out. Switch it on in the web interface (General -> Battery) once the voltage reads correctly.
 	if (!gPrefsSettings.isKey("numIdleDots")) {
 		gPrefsSettings.putUChar("numIdleDots", 8); // was: #define NUM_LEDS_IDLE_DOTS 8
 		Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", "numIdleDots", 8);

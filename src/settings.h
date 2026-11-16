@@ -115,12 +115,15 @@
 
 	// Rotary gestures: hold the button, turn the encoder. CMD_NOTHING disables the button as a modifier.
 	// A modifier button keeps its normal short/long action when it is pressed *without* turning the encoder.
-	#define BUTTON_0_ROTARY_CW   CMD_SEEK_FORWARDS   // hold NEXT + turn: seek within the track
-	#define BUTTON_0_ROTARY_CCW  CMD_SEEK_BACKWARDS
+	// [custom] All gestures are switched off, so every button behaves exactly as before v3 (a long press fires after
+	// intervalToLongPress instead of on release). Upstream's defaults: button 0 = CMD_SEEK_FORWARDS / CMD_SEEK_BACKWARDS,
+	// button 2 = CMD_BRIGHTNESS_UP / CMD_BRIGHTNESS_DOWN. They can be assigned in the web interface at any time.
+	#define BUTTON_0_ROTARY_CW   CMD_NOTHING
+	#define BUTTON_0_ROTARY_CCW  CMD_NOTHING
 	#define BUTTON_1_ROTARY_CW   CMD_NOTHING
 	#define BUTTON_1_ROTARY_CCW  CMD_NOTHING
-	#define BUTTON_2_ROTARY_CW   CMD_BRIGHTNESS_UP   // hold PLAY/PAUSE + turn: LED brightness
-	#define BUTTON_2_ROTARY_CCW  CMD_BRIGHTNESS_DOWN
+	#define BUTTON_2_ROTARY_CW   CMD_NOTHING
+	#define BUTTON_2_ROTARY_CCW  CMD_NOTHING
 	#define BUTTON_3_ROTARY_CW   CMD_NOTHING         // rotary push: short=play/pause, long=sleep -- left free on purpose
 	#define BUTTON_3_ROTARY_CCW  CMD_NOTHING
 	#define BUTTON_4_ROTARY_CW   CMD_NOTHING
@@ -197,12 +200,10 @@
 		constexpr uint8_t s_batteryCheckInterval = 10; // How often battery is measured (in minutes) (can be changed via GUI!)
 
 		// (optional) Default-voltages for battery-monitoring via Neopixel; can be changed later via WebGUI
-		// [custom] Kept at the values this box has always used (LiPo range, pre-v3 defaults). Upstream switched its
-		// defaults to LiFePO4 (3.0 / 2.9 / 2.9 / 3.3). Only relevant for an empty NVS; existing values in NVS win.
-		constexpr float s_warningLowVoltage = 3.4;                      // If battery-voltage is <= this value, a cyclic warning will be indicated by Neopixel (can be changed via GUI!)
-		constexpr float s_warningCriticalVoltage = 3.1;                 // If battery-voltage is <= this value, assume battery near-empty. Whether this triggers a shutdown is a separate GUI-toggle (off by default).
-		constexpr float s_voltageIndicatorLow = 3.0;                    // Lower range for Neopixel-voltage-indication (0 leds) (can be changed via GUI!)
-		constexpr float s_voltageIndicatorHigh = 4.2;                   // Upper range for Neopixel-voltage-indication (all leds) (can be changed via GUI!)
+		constexpr float s_warningLowVoltage = 3.0;                      // If battery-voltage is <= this value, a cyclic warning will be indicated by Neopixel (can be changed via GUI!)
+		constexpr float s_warningCriticalVoltage = 2.9;                 // If battery-voltage is <= this value, assume battery near-empty. Whether this triggers a shutdown is a separate GUI-toggle (off by default).
+		constexpr float s_voltageIndicatorLow = 2.9;                    // Lower range for Neopixel-voltage-indication (0 leds) (can be changed via GUI!)
+		constexpr float s_voltageIndicatorHigh = 3.3;                   // Upper range for Neopixel-voltage-indication (all leds) (can be changed via GUI!)
 	#endif
 
 	// enable I2C if necessary
