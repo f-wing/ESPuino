@@ -61,12 +61,42 @@ void System_Init_Rfid_Prefs(void) {
 	}
 }
 
+// [custom] With upstream v3 many options moved from compile-time switches in settings.h into NVS, where they are
+// configured via the web interface and default to "off". This seeds the choices this box was built with, once, for
+// every key that does not exist in NVS yet. So the device behaves as before right after the update, while anything
+// that is changed in the web interface later on still wins.
+static void System_SeedFormerCompileTimeSettings(void) {
+	struct BoolSeed {
+		const char *key;
+		bool value;
+	};
+	static constexpr BoolSeed boolSeeds[] = {
+		{"ledReverseRot", true}, // was: #define NEOPIXEL_REVERSE_ROTATION
+		{"playMono", true}, // was: #define PLAY_MONO_SPEAKER
+		{"shutdownBatCrit", true}, // was: #define SHUTDOWN_ON_BAT_CRITICAL
+		{"recoverVolBoot", true}, // was: #define USE_LAST_VOLUME_AFTER_REBOOT
+		{"pauseRfidRem", true}, // was: #define PAUSE_WHEN_RFID_REMOVED
+	};
+	for (const BoolSeed &seed : boolSeeds) {
+		if (!gPrefsSettings.isKey(seed.key)) {
+			gPrefsSettings.putBool(seed.key, seed.value);
+			Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", seed.key, seed.value);
+		}
+	}
+	if (!gPrefsSettings.isKey("numIdleDots")) {
+		gPrefsSettings.putUChar("numIdleDots", 8); // was: #define NUM_LEDS_IDLE_DOTS 8
+		Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", "numIdleDots", 8);
+	}
+}
+
 void System_Init(void) {
 	srand(esp_random());
 
 	if (!gPrefsSettings.begin(prefsSettingsNamespace)) {
 		Log_Println("Failed to open NVS namespace 'settings'", LOGLEVEL_ERROR);
 	}
+
+	System_SeedFormerCompileTimeSettings();
 
 	// Get maximum inactivity-time from NVS
 	uint32_t nvsMInactivityTime = gPrefsSettings.getUInt("mInactiviyT", System_MaxInactivityTime);
