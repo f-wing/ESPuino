@@ -111,9 +111,9 @@
     #define MIC_DETECT                      111            // high if microphone is connected
 
     // ES8388 audio-codec: I2C control interface (codec address 0x10)
-    // The pins used by the hand-patched ES8388 library of the pre-v3 build were never part of this repository.
-    // Default assumption: the codec shares the external I2C bus with the port-expander (ext_IIC_DATA / ext_IIC_CLK).
-    // If your ES8388 is wired to its own pins instead, enable and adjust the two lines below.
+    // The codec is wired to SDA = GPIO13 / SCL = GPIO4. That is the external I2C bus (ext_IIC_DATA / ext_IIC_CLK
+    // below), which it shares with the port-expander -- so there is nothing to configure here.
+    // Only if the codec ever moves to pins of its own: enable and adjust the two lines below.
     //#define ES8388_I2C_SDA                 32          // dedicated I2C-SDA for ES8388
     //#define ES8388_I2C_SCL                 5           // dedicated I2C-SCL for ES8388
 

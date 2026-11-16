@@ -15,7 +15,10 @@ copy lives here instead of a `lib_deps` entry:
 
 The original constructor `ES8388(sda, scl, speed)` is still there and starts `Wire` on those pins.
 
+In this build the codec sits on SDA = GPIO13 / SCL = GPIO4, the same I2C bus as the port-expander.
+`main.cpp` therefore hands ESPuino's `i2cBusTwo` to `setBus()`.
+
 **Note:** before the merge with upstream v3.2 these additions only existed as hand edits inside
 `.pio/libdeps/`, which is not under version control. The versions here are a reconstruction. If you
 still have the original patched `ES8388.h` / `ES8388.cpp`, compare them against `src/` — in
-particular the register sequence in `power_down()` and the I2C pins.
+particular the register sequence in `power_down()`.
