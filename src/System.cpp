@@ -392,6 +392,43 @@ void System_PauseTasksDuringUpload(bool pause) {
 
 // Print the wake-up reason why ESP32 is awake now
 void System_ShowWakeUpReason() {
+	// [custom] Why the ESP32 started: tells a brown-out or a crash apart from a planned restart / wake-up.
+	const esp_reset_reason_t resetReason = esp_reset_reason();
+	const char *resetReasonName = "unknown";
+	switch (resetReason) {
+		case ESP_RST_POWERON:
+			resetReasonName = "power-on";
+			break;
+		case ESP_RST_EXT:
+			resetReasonName = "external pin";
+			break;
+		case ESP_RST_SW:
+			resetReasonName = "software restart";
+			break;
+		case ESP_RST_PANIC:
+			resetReasonName = "crash (panic)";
+			break;
+		case ESP_RST_INT_WDT:
+			resetReasonName = "interrupt watchdog";
+			break;
+		case ESP_RST_TASK_WDT:
+			resetReasonName = "task watchdog";
+			break;
+		case ESP_RST_WDT:
+			resetReasonName = "other watchdog";
+			break;
+		case ESP_RST_DEEPSLEEP:
+			resetReasonName = "wake-up from deep sleep";
+			break;
+		case ESP_RST_BROWNOUT:
+			resetReasonName = "brown-out (supply voltage too low)";
+			break;
+		default:
+			break;
+	}
+	Log_Printf((resetReason == ESP_RST_BROWNOUT || resetReason == ESP_RST_PANIC || resetReason == ESP_RST_INT_WDT || resetReason == ESP_RST_TASK_WDT || resetReason == ESP_RST_WDT) ? LOGLEVEL_ERROR : LOGLEVEL_NOTICE,
+		"Reset reason: %s (%d)", resetReasonName, resetReason);
+
 	esp_sleep_wakeup_cause_t wakeup_reason;
 	wakeup_reason = esp_sleep_get_wakeup_cause();
 
