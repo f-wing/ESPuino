@@ -110,12 +110,8 @@
     // Microphone detection
     #define MIC_DETECT                      111            // high if microphone is connected
 
-    // ES8388 audio-codec: I2C control interface (codec address 0x10)
-    // The codec is wired to SDA = GPIO13 / SCL = GPIO4. That is the external I2C bus (ext_IIC_DATA / ext_IIC_CLK
-    // below), which it shares with the port-expander -- so there is nothing to configure here.
-    // Only if the codec ever moves to pins of its own: enable and adjust the two lines below.
-    //#define ES8388_I2C_SDA                 32          // dedicated I2C-SDA for ES8388
-    //#define ES8388_I2C_SCL                 5           // dedicated I2C-SCL for ES8388
+    // ES8388 audio-codec (I2C address 0x10): wired to SDA = GPIO13 / SCL = GPIO4, i.e. the external I2C bus
+    // (ext_IIC_DATA / ext_IIC_CLK below) that it shares with the port-expander. lib/ES8388 uses i2cBusTwo directly.
 
 	// (optional) Monitoring of battery-voltage via ADC
 	#ifdef MEASURE_BATTERY_VOLTAGE

@@ -61,48 +61,49 @@
 #define ES8388_DACCONTROL29 0x33
 #define ES8388_DACCONTROL30 0x34
 
-TwoWire* ES8388::_wire = nullptr;
-
-ES8388::ES8388() {}
+// [ESPuino] The ES8388 shares the external I2C bus with the port-expander (SDA = GPIO13, SCL = GPIO4).
+// ESPuino starts that bus as i2cBusTwo in main.cpp before the codec is initialised.
+extern TwoWire i2cBusTwo;
 
 ES8388::ES8388(uint8_t _sda, uint8_t _scl, uint32_t _speed) {
-  Wire.begin(_sda, _scl, _speed);
-  _wire = &Wire;
+   _pinsda = _sda;
+   _pinscl = _scl;
+   _i2cspeed = _speed;
+   Wire.begin(_sda, _scl, _speed); // [ESPuino] not used by ESPuino; was the TwoWire(0) member
 }
 
-// The bus belongs to the application (it may be shared with other devices), so it
-// is deliberately left running here.
-ES8388::~ES8388() {}
+ES8388::ES8388() {
+}
 
-void ES8388::setBus(TwoWire& wire) { _wire = &wire; }
+ES8388::~ES8388() { 
+  /*i2c.~TwoWire(); */
+  }
 
 bool ES8388::write_reg(uint8_t reg_add, uint8_t data) {
-  if (_wire == nullptr) return false;
-  _wire->beginTransmission(ES8388_ADDR);
-  _wire->write(reg_add);
-  _wire->write(data);
-  return _wire->endTransmission() == 0;
+  i2cBusTwo.beginTransmission(ES8388_ADDR);
+  i2cBusTwo.write(reg_add);
+  i2cBusTwo.write(data);
+  return i2cBusTwo.endTransmission() == 0;
 }
 
 bool ES8388::read_reg(uint8_t reg_add, uint8_t& data) {
   bool retval = false;
-  if (_wire == nullptr) return false;
-  _wire->beginTransmission(ES8388_ADDR);
-  _wire->write(reg_add);
-  _wire->endTransmission(false);
-  _wire->requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
-  if (_wire->available() >= 1) {
-    data = _wire->read();
+  i2cBusTwo.beginTransmission(ES8388_ADDR);
+  i2cBusTwo.write(reg_add);
+  i2cBusTwo.endTransmission(false);
+  i2cBusTwo.requestFrom((uint16_t)ES8388_ADDR, (uint8_t)1, true);
+  if (i2cBusTwo.available() >= 1) {
+    data = i2cBusTwo.read();
     retval = true;
   }
   return retval;
 }
 
 bool ES8388::identify(int sda, int scl, uint32_t frequency) {
+  // [ESPuino] not used by ESPuino; was the TwoWire(0) member
   Wire.begin(sda, scl, frequency);
-  _wire = &Wire;
-  _wire->beginTransmission(ES8388_ADDR);
-  return _wire->endTransmission() == 0;
+  Wire.beginTransmission(ES8388_ADDR);
+  return Wire.endTransmission() == 0;
 }
 
 uint8_t* ES8388::readAllReg() {
@@ -131,10 +132,10 @@ bool ES8388::init() {
   // Micbias for Record
   res &= write_reg(ES8388_ADCPOWER, 0x00);
   // Enable Lin1/Rin1 (0x00 0x00) for Lin2/Rin2 (0x50 0x80)
-  res &= write_reg(ES8388_ADCCONTROL2, 0x50);
-  res &= write_reg(ES8388_ADCCONTROL3, 0x80);
+  res &= write_reg(ES8388_ADCCONTROL2, 0xF0);//0x50
+  res &= write_reg(ES8388_ADCCONTROL3, 0x00);//0x80
   // PGA gain (0x88 - 24db) (0x77 - 21db)
-  res &= write_reg(ES8388_ADCCONTROL1, 0x77);
+  res &= write_reg(ES8388_ADCCONTROL1, 0x0);//0x77
   // SFI setting (i2s mode/16 bit)
   res &= write_reg(ES8388_ADCCONTROL4, 0x0C);
   // ADC MCLK/LCRK ratio (256)
@@ -163,11 +164,11 @@ bool ES8388::init() {
   res &= write_reg(ES8388_DACCONTROL5, 0x00);
   // Setup Mixer
   // (reg[16] 1B mic Amp, 0x09 direct;[reg 17-20] 0x90 DAC, 0x50 Mic Amp)
-  res &= write_reg(ES8388_DACCONTROL16, 0x09);
-  res &= write_reg(ES8388_DACCONTROL17, 0x50);
+  res &= write_reg(ES8388_DACCONTROL16, 0x1B);
+  res &= write_reg(ES8388_DACCONTROL17, 0xD0); //0X50
   res &= write_reg(ES8388_DACCONTROL18, 0x38);  //??
   res &= write_reg(ES8388_DACCONTROL19, 0x38);  //??
-  res &= write_reg(ES8388_DACCONTROL20, 0x50);
+  res &= write_reg(ES8388_DACCONTROL20, 0xD0); //0x50
   // set Lout/Rout Volume -45db
   res &= write_reg(ES8388_DACCONTROL24, 0x00);
   res &= write_reg(ES8388_DACCONTROL25, 0x00);
@@ -180,26 +181,25 @@ bool ES8388::init() {
   return res;
 }
 
-// Standby: silence the outputs first so that nothing pops, then return the
-// power-management registers to (or below) their power-on-reset state.
-// Every register touched here is written again by init().
 bool ES8388::power_down() {
   bool res = true;
-  // mute DAC
-  res &= write_reg(ES8388_DACCONTROL3, 0x04);
-  // disconnect DAC and microphone/line path from the output mixers
-  res &= write_reg(ES8388_DACCONTROL17, 0x00);
-  res &= write_reg(ES8388_DACCONTROL20, 0x00);
-  // power down DAC L/R, disable LOUT1/ROUT1/LOUT2/ROUT2
+
+  /* Power Down Sequence according to user guide*/
+  //ADC Mute
+  res &= write_reg(ES8388_ADCCONTROL7, 0x34);
+
+  //DAC Mute
+  res &= write_reg(ES8388_DACCONTROL3, 0x36);
+  
+  //Power down DEM and STM
+  res &= write_reg(ES8388_CHIPPOWER, 0xF3);
+ 
+  //Power down ADC / Analog Input / Micbias for Record
+  res &= write_reg(ES8388_ADCPOWER, 0xFC);
+  
+  //Power down DAC and disable LOUT/ROUT
   res &= write_reg(ES8388_DACPOWER, 0xC0);
-  // power down ADC, analog inputs and microphone bias
-  res &= write_reg(ES8388_ADCPOWER, 0xFF);
-  // Power down DEM and STM (as at the start of init())
-  res &= write_reg(ES8388_CHIPPOWER, 0xFF);
-  // power down analog and Ibias (reset value)
-  res &= write_reg(ES8388_CONTROL2, 0x5C);
-  // keep the reference alive through the 500k divider only (reset value)
-  res &= write_reg(ES8388_CONTROL1, 0x06);
+
   return res;
 }
 
@@ -331,7 +331,7 @@ bool ES8388::setALCmode(alcmodesel_t alc) {
     ALCATK = 0b0010;  // 416us/step
     NGTH = 0b11000;   // -40.5db
     NGG = 0b01;       // mute ADC
-    res &= write_reg(ES8388_ADCCONTROL1, 0x77);
+    res &= write_reg(ES8388_ADCCONTROL1, 0x0);//0x77
   }
   res &= write_reg(ES8388_ADCCONTROL10, ALCSEL << 6 | MAXGAIN << 3 | MINGAIN);
   res &= write_reg(ES8388_ADCCONTROL11, ALCLVL << 4 | ALCHLD);

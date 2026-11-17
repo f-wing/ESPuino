@@ -151,14 +151,7 @@ void setup() {
 
 	Battery_Init();
 
-	// Init ES8388
-	// Select the I2C-bus the codec is connected to (see ES8388_I2C_SDA / ES8388_I2C_SCL in the board-specific settings)
-#if defined(ES8388_I2C_SDA) && defined(ES8388_I2C_SCL)
-	Wire.begin(ES8388_I2C_SDA, ES8388_I2C_SCL, 100000u);
-	ES8388::setBus(Wire);
-#elif defined(I2C_2_ENABLE)
-	ES8388::setBus(i2cBusTwo); // shared with the port-expander
-#endif
+	// Init ES8388 (talks via i2cBusTwo, see lib/ES8388)
 	ES8388 es8388;
 
 	Serial.println("Read Reg ES8388 : ");
