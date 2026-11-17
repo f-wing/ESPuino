@@ -1138,8 +1138,11 @@ void AudioPlayer_Loop() {
 
 			case PAUSE: // [custom] pause only: unlike PAUSEPLAY this never resumes (CMD_PAUSE)
 				trackCommand = NO_ACTION;
-				if (!gPlayProperties.pausePlay) {
+				// Same as Audio::pause() of the patched pre-v3 audio library: it only ever stops the decoder.
+				if (audio->isRunning()) {
 					audio->pauseResume();
+				}
+				if (!gPlayProperties.pausePlay) {
 					Log_Println(cmndPause, LOGLEVEL_INFO);
 #ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "pause", false);
