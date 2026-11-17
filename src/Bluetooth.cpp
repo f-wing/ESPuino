@@ -1010,7 +1010,11 @@ void Bluetooth_Init(void) {
 	if (System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) {
 		a2dp_sink = new BluetoothA2DPSink();
 	#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3))
+		#ifdef I2S_MCLK
+		i2s.setPins(I2S_BCLK, I2S_LRC, I2S_DOUT, -1, I2S_MCLK); // [custom] the ES8388 needs MCLK (256 x Fs)
+		#else
 		i2s.setPins(I2S_BCLK, I2S_LRC, I2S_DOUT);
+		#endif
 		if (!i2s.begin(I2S_MODE_STD, 44100, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) {
 			Log_Println("Failed to initialize I2S!", LOGLEVEL_ERROR);
 			while (1)

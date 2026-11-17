@@ -610,7 +610,18 @@ void AudioPlayer_Init(void) {
 	// cleanup (seen as list corruption / a task dying while holding a mutex).
 	audio->setAudioTaskCore(1);
 	// audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
-	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK);
+#ifdef I2S_MCLK
+	if (System_GetOperationMode() == OPMODE_BLUETOOTH_SINK) {
+		// [custom] In Bluetooth-speaker mode the A2DP sink feeds the codec through an I2S port of its own (see
+		// Bluetooth_Init()), and that port has to supply MCLK. Only one port can put MCLK on the pin: a second
+		// request is refused by ESP-IDF ("Selected io is already mapped by another signal").
+		audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+	} else {
+		audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT, I2S_MCLK);
+	}
+#else
+	audio->setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+#endif
 
 	// must be called after setPinout() to take effect
 	if (System_GetOperationMode() == OPMODE_BLUETOOTH_SOURCE) {
