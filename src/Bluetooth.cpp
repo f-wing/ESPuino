@@ -25,6 +25,51 @@
 	#if (defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3))
 		#include "ESP_I2S.h"
 I2SClass i2s;
+
+		#ifdef SPEAKER_BRIDGED_MONO
+// [custom] Bluetooth-speaker mode bypasses the decoder, so the bridged mono for the differentially connected
+// speaker amplifier (see SPEAKER_BRIDGED_MONO and audio_process_i2s()) is applied here, between the A2DP sink and
+// I2S. Data: 16-bit signed PCM, stereo interleaved.
+class BridgedMonoPrint : public Print {
+public:
+	explicit BridgedMonoPrint(Print &out)
+		: out(out) { }
+
+	size_t write(uint8_t b) override {
+		return out.write(b);
+	}
+
+	size_t write(const uint8_t *data, size_t len) override {
+		if (!AudioPlayer_IsSpeakerBridgedMonoActive()) {
+			return out.write(data, len);
+		}
+		int16_t chunk[256]; // 128 stereo frames
+		size_t done = 0;
+		while (len - done >= 4) {
+			const size_t bytes = std::min(len - done, sizeof(chunk)) & ~static_cast<size_t>(3);
+			memcpy(chunk, data + done, bytes);
+			for (size_t i = 0; i + 1 < bytes / sizeof(int16_t); i += 2) {
+				const int16_t q = static_cast<int16_t>((static_cast<int32_t>(chunk[i]) + chunk[i + 1]) >> 2);
+				chunk[i] = q;
+				chunk[i + 1] = -q;
+			}
+			const size_t written = out.write(reinterpret_cast<const uint8_t *>(chunk), bytes);
+			done += written;
+			if (written < bytes) {
+				return done;
+			}
+		}
+		if (done < len) {
+			done += out.write(data + done, len - done); // incomplete frame: pass through
+		}
+		return done;
+	}
+
+private:
+	Print &out;
+};
+static BridgedMonoPrint i2sBridgedMono(i2s);
+		#endif
 	#endif
 #endif
 
@@ -1020,7 +1065,11 @@ void Bluetooth_Init(void) {
 			while (1)
 				;
 		}
+		#ifdef SPEAKER_BRIDGED_MONO
+		a2dp_sink->set_output(i2sBridgedMono);
+		#else
 		a2dp_sink->set_output(i2s);
+		#endif
 	#else
 		i2s_pin_config_t pin_config = {
 		#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)

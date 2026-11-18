@@ -119,6 +119,8 @@ void AudioPlayer_SetMinVolume(uint8_t value);
 uint8_t AudioPlayer_GetInitVolume(void);
 void AudioPlayer_SetInitVolume(uint8_t value);
 void AudioPlayer_SetupVolumeAndAmps(void);
+// [custom] true while the speaker (not headphones) is active and SPEAKER_BRIDGED_MONO is set
+bool AudioPlayer_IsSpeakerBridgedMonoActive(void);
 // Interrupts playback to play a single local file (e.g. "battery low"), then returns to the exact
 // position it interrupted. The playlist, track number and play mode are left untouched, and while the
 // announcement runs nothing about it is reported to the web interface or MQTT -- from the outside the

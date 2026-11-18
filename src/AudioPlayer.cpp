@@ -212,6 +212,22 @@ static bool AudioPlayer_StartOnPlay = false;
 static bool AudioPlayer_NewPlaylistStartsPaused = false; // handed over together with newPlayList
 static bool AudioPlayer_StartPaused = false; // for the playlist that is currently being started
 
+// [custom] Bridged mono for the differentially connected speaker amplifier (see SPEAKER_BRIDGED_MONO). Written in the
+// loop task when speaker/headphones are switched, read by the audio task and the Bluetooth sink.
+static std::atomic<bool> AudioPlayer_SpeakerBridgedMono {false};
+
+static void AudioPlayer_SetSpeakerActive(bool speakerActive) {
+#ifdef SPEAKER_BRIDGED_MONO
+	AudioPlayer_SpeakerBridgedMono.store(speakerActive, std::memory_order_relaxed);
+#else
+	(void) speakerActive;
+#endif
+}
+
+bool AudioPlayer_IsSpeakerBridgedMonoActive(void) {
+	return AudioPlayer_SpeakerBridgedMono.load(std::memory_order_relaxed);
+}
+
 // Remember an RFID-tag whose webstream could not be started because WiFi is not (yet) connected, so it can
 // be re-injected into the RFID-queue once WiFi is up (see handleWifiStateConnectionSuccess() in Wlan.cpp).
 static void AudioPlayer_RememberRfidForWifiRetry(const char *rfidTagId) {
@@ -914,6 +930,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 
 #ifndef HEADPHONE_ADJUST_ENABLE
 	AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
+	AudioPlayer_SetSpeakerActive(true);
 	// If automatic HP-detection is not used, we enabled both (PA / HP) if defined
 	#ifdef GPIO_PA_EN
 	Port_Write(GPIO_PA_EN, true, true);
@@ -925,6 +942,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 
 	if (!AudioPlayer_IsHeadphoneModeActive()) {
 		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker; // 1 if headphone is not connected
+		AudioPlayer_SetSpeakerActive(true);
 	#ifdef GPIO_PA_EN
 		Port_Write(GPIO_PA_EN, true, true);
 	#endif
@@ -934,6 +952,7 @@ void AudioPlayer_SetupVolumeAndAmps(void) {
 	} else {
 		AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone; // 0 if headphone is connected (put to GND)
 		gPlayProperties.newPlayMono = false; // always stereo for headphones!
+		AudioPlayer_SetSpeakerActive(false);
 
 	#ifdef GPIO_PA_EN
 		Port_Write(GPIO_PA_EN, false, true);
@@ -955,6 +974,7 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 		if (!AudioPlayer_IsHeadphoneModeActive()) {
 			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeSpeaker;
 			gPlayProperties.newPlayMono = gPrefsSettings.getBool("playMono", false);
+			AudioPlayer_SetSpeakerActive(true);
 
 	#ifdef GPIO_PA_EN
 			Port_Write(GPIO_PA_EN, true, false);
@@ -965,6 +985,7 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 		} else {
 			AudioPlayer_MaxVolume = AudioPlayer_MaxVolumeHeadphone;
 			gPlayProperties.newPlayMono = false; // Always stereo for headphones
+			AudioPlayer_SetSpeakerActive(false);
 			if (AudioPlayer_GetCurrentVolume() > AudioPlayer_MaxVolume) {
 				AudioPlayer_SetVolume(AudioPlayer_MaxVolume); // Lower volume for headphone if headphone's maxvolume is exceeded by volume set in speaker-mode
 			}
@@ -2202,6 +2223,18 @@ void audio_process_i2s(int32_t *outBuff, int16_t validSamples, bool *continueI2S
 		*continueI2S = false;
 		return;
 	}
+
+#ifdef SPEAKER_BRIDGED_MONO
+	if (AudioPlayer_SpeakerBridgedMono.load(std::memory_order_relaxed)) {
+		// [custom] Bridged mono, see SPEAKER_BRIDGED_MONO: q on the left, -q on the right, so the amplifier, which
+		// sees left minus right, gets 2q = (L+R)/2 -- the mono signal at the level of one full channel.
+		for (int32_t i = 0; i + 1 < validSamples; i += 2) {
+			const int32_t q = (int32_t) (((int64_t) outBuff[i] + outBuff[i + 1]) >> 2);
+			outBuff[i] = q;
+			outBuff[i + 1] = -q;
+		}
+	}
+#endif
 
 	*continueI2S = true;
 }

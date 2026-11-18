@@ -52,6 +52,11 @@
     // I2S (DAC)
     #define ES8388_ENABLE                               // [custom] ES8388 codec (I2C-controlled) instead of a plain I2S-DAC
     #define I2S_MCLK                         0          // MCLK (IS2) set to GPIO0
+    // [custom] The speaker amplifier (PAM8302A) is connected differentially: LOUT1 -> IN+, ROUT1 -> IN- (1uF + 10k in
+    // series each). It amplifies left minus right, so plain stereo loses everything in the centre and mono is silent.
+    // With this switch the speaker gets a bridged mono signal instead: (L+R)/4 on the left, the inverted value on the
+    // right, i.e. (L+R)/2 across the amplifier input. Headphones stay stereo.
+    #define SPEAKER_BRIDGED_MONO
     #define I2S_DOUT                        25          // Digital out (I2S)
     #define I2S_BCLK                        27          // BCLK (I2S)
     #define I2S_LRC                         26          // LRC (I2S)
