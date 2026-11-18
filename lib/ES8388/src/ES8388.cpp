@@ -140,6 +140,14 @@ bool ES8388::init() {
   res &= write_reg(ES8388_ADCCONTROL4, 0x0C);
   // ADC MCLK/LCRK ratio (256)
   res &= write_reg(ES8388_ADCCONTROL5, 0x02);
+  // [ESPuino] Undo the ADC mute that power_down() sets (ADCCONTROL7 bit 2). The codec is permanently powered,
+  // so that register survives deep sleep and restarts, and nothing else in here writes it.
+  uint8_t adcControl7 = 0;
+  if (read_reg(ES8388_ADCCONTROL7, adcControl7)) {
+    res &= write_reg(ES8388_ADCCONTROL7, adcControl7 & ~0x04);
+  } else {
+    res = false;
+  }
   // set ADC digital volume
   res &= write_reg(ES8388_ADCCONTROL8, 0x00);
   res &= write_reg(ES8388_ADCCONTROL9, 0x00);
@@ -243,8 +251,10 @@ bool ES8388::inputSelect(insel_t sel) {
 
 // mute Output
 bool ES8388::DACmute(bool mute) {
-  uint8_t _reg;
-  read_reg(ES8388_ADCCONTROL1, _reg);
+  // [ESPuino] read-modify-write of DACCONTROL3 itself (the library read ADCCONTROL1, and used _reg uninitialised
+  // when the read failed). Not called by ESPuino.
+  uint8_t _reg = 0;
+  if (!read_reg(ES8388_DACCONTROL3, _reg)) return false;
   bool res = true;
   if (mute)
     res &= write_reg(ES8388_DACCONTROL3, _reg | 0x04);
