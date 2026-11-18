@@ -72,7 +72,6 @@ static void System_SeedFormerCompileTimeSettings(void) {
 	};
 	static constexpr BoolSeed boolSeeds[] = {
 		{"ledReverseRot", true}, // was: #define NEOPIXEL_REVERSE_ROTATION
-		{"playMono", true}, // was: #define PLAY_MONO_SPEAKER
 		{"recoverVolBoot", true}, // was: #define USE_LAST_VOLUME_AFTER_REBOOT
 		{"pauseRfidRem", true}, // was: #define PAUSE_WHEN_RFID_REMOVED
 	};
@@ -82,7 +81,11 @@ static void System_SeedFormerCompileTimeSettings(void) {
 			Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", seed.key, seed.value);
 		}
 	}
-	// Not seeded on purpose: "shutdownBatCrit" (was: #define SHUTDOWN_ON_BAT_CRITICAL). With it, a reading below the
+	// Not seeded on purpose: "playMono" (was: #define PLAY_MONO_SPEAKER). The speaker amplifier (PAM8302A) is
+	// connected differentially between the codec's left and right output, so it plays left minus right: mono
+	// content cancels out and the speaker falls silent. (The old firmware never really switched to mono after
+	// boot, which is why this went unnoticed.) A proper bridged mono output is still to be done.
+	// Not seeded on purpose either: "shutdownBatCrit" (was: #define SHUTDOWN_ON_BAT_CRITICAL). With it, a reading below the
 	// critical threshold sends the box to deep sleep during boot, before the web interface is up. As the voltage
 	// correction has to be re-calibrated after this update (see s_offsetVoltage), an uncalibrated reading could lock
 	// the box out. Switch it on in the web interface (General -> Battery) once the voltage reads correctly.
