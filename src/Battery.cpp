@@ -10,6 +10,7 @@
 #include "Power.h"
 #include "Rfid.h"
 #include "System.h"
+#include "ES8388.h"
 
 #ifdef BATTERY_MEASURE_ENABLE
 uint8_t batteryCheckInterval = s_batteryCheckInterval;
@@ -35,6 +36,10 @@ void Battery_Init(void) {
 		Log_Println(batteryCriticalMsg, LOGLEVEL_NOTICE);
 		// turn off peripheral power just to be sure, even if it should not yet have been turned on
 		Power_PeripheralOff();
+		// [custom] The ES8388 is permanently powered and keeps running through deep sleep unless it is put into
+		// standby. After an unplanned reset (e.g. a brown-out) nobody did that yet, so do it here.
+		ES8388 es8388Standby;
+		es8388Standby.power_down();
 		// Power down and enter deepsleep
 		// Don't call System_RequestSleep() here: If the battery is critial, we want to avoid as much init work as possible
 		// and also any blinking lights or sounds. The goal is to just stay off.
