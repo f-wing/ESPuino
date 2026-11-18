@@ -1140,6 +1140,14 @@ void AudioPlayer_Loop() {
 		   (stop, start, next track, prev. track, last track, first track...) */
 		switch (trackCommand) {
 			case STOP:
+				// [custom] Save the audiobook position first: a card that is lifted off the reader sends STOP
+				// (see RfidPn5180.cpp), and STOP did not save anything. While a deferred resume-seek is still
+				// pending, the decoder is not at the resume position yet, so that position is kept instead.
+				if (gPlayProperties.saveLastPlayPosition && !gPlayProperties.pausePlay && audio->isRunning()) {
+					const uint32_t stopPos = (AudioPlayer_resumeSeekPendingSecs > 0) ? AudioPlayer_resumeSeekPendingSecs : audio->getAudioCurrentTime();
+					Log_Printf(LOGLEVEL_INFO, trackPausedAtPos, stopPos, audio->getAudioFileDuration());
+					AudioPlayer_NvsRfidWriteWrapper(gPlayProperties.playRfidTag, stopPos, gPlayProperties.playMode, gPlayProperties.currentTrackNumber);
+				}
 				audio->stopSong();
 				trackCommand = NO_ACTION;
 				AudioPlayer_StartOnPlay = false;
