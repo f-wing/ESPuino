@@ -176,6 +176,7 @@ static void RfidMfrc522_TaskImpl(Reader &reader) {
 
 			if (gPlayProperties.pauseIfRfidRemoved) {
 				if (!sameCardReapplied || gPlayProperties.trackFinished || gPlayProperties.playlistFinished) { // Don't allow to send card to queue if it's the same card again if track or playlist is unfnished
+					gRfidCardFromReader = true; // [custom] see Rfid.h
 					xQueueSend(gRfidCardQueue, cardIdString.c_str(), 0);
 				} else {
 					// If pause-button was pressed while card was not applied, playback could be active. If so: don't pause when card is reapplied again as the desired functionality would be reversed in this case.
@@ -185,6 +186,7 @@ static void RfidMfrc522_TaskImpl(Reader &reader) {
 				}
 				memcpy(lastValidcardId, reader.uid.uidByte, cardIdSize);
 			} else {
+				gRfidCardFromReader = true; // [custom] see Rfid.h
 				xQueueSend(gRfidCardQueue, cardIdString.c_str(), 0); // If pauseIfRfidRemoved isn't active, every card-apply leads to new playlist-generation
 			}
 

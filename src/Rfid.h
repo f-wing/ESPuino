@@ -1,9 +1,15 @@
 #pragma once
 
+#include <atomic>
+
 constexpr uint8_t cardIdSize = 4u;
 constexpr uint8_t cardIdStringSize = (cardIdSize * 3u) + 1u;
 
 extern char gCurrentRfidTagId[cardIdStringSize];
+// [custom] Set by the reader tasks right before they queue a card that was put on the reader, as opposed to the
+// other sources of gRfidCardQueue (virtual cards, MQTT, resuming after an announcement, WiFi retry, ...).
+// Used for "no autoplay when a card is presented".
+extern std::atomic<bool> gRfidCardFromReader;
 
 void Rfid_ResetOldRfid(void);
 void Rfid_ResetLastTag(void);

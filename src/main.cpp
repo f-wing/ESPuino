@@ -28,7 +28,9 @@
 #include "Web.h"
 #include "Wlan.h"
 #include "gitrevision.h"
-#include "ES8388.h"
+#ifdef ES8388_ENABLE
+	#include "ES8388.h"
+#endif
 
 #include <Wire.h>
 
@@ -151,6 +153,7 @@ void setup() {
 
 	Battery_Init();
 
+#ifdef ES8388_ENABLE
 	// Init ES8388 (talks via i2cBusTwo, see lib/ES8388)
 	ES8388 es8388;
 
@@ -171,6 +174,7 @@ void setup() {
 	// for (uint8_t i = 0; i < 53; i++) {
 	// 	Log_Printf(LOGLEVEL_NOTICE, "Reg-%02d = 0x%02x\r", i, reg[i]);
 	// }
+#endif
 
 	// Init audio before power on to avoid speaker noise
 	AudioPlayer_Init();

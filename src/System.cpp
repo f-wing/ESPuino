@@ -20,7 +20,9 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "ES8388.h"
+#ifdef ES8388_ENABLE
+	#include "ES8388.h"
+#endif
 
 #include <atomic>
 #include <esp_random.h>
@@ -46,7 +48,9 @@ static bool System_Nightmode = false;
 // Operation Mode
 std::atomic<uint8_t> System_OperationMode;
 
+#ifdef ES8388_ENABLE
 ES8388 es8388_2;
+#endif
 
 void System_SleepHandler(void);
 void System_DeepSleepManager(void);
@@ -81,10 +85,10 @@ static void System_SeedFormerCompileTimeSettings(void) {
 			Log_Printf(LOGLEVEL_NOTICE, "Seeded NVS-setting '%s' with %d", seed.key, seed.value);
 		}
 	}
-	// Not seeded on purpose: "playMono" (was: #define PLAY_MONO_SPEAKER). The speaker amplifier (PAM8302A) is
-	// connected differentially between the codec's left and right output, so it plays left minus right: mono
-	// content cancels out and the speaker falls silent. (The old firmware never really switched to mono after
-	// boot, which is why this went unnoticed.) A proper bridged mono output is still to be done.
+	// Not seeded on purpose: "playMono" (was: #define PLAY_MONO_SPEAKER). The old firmware lost this setting right
+	// after boot, so in practice the speaker always got stereo. The speaker amplifier (PAM8302A) is connected
+	// differentially; if that is between the codec's left and right output, it plays left minus right, and with
+	// mono the speaker would fall silent. Keep stereo until the wiring is confirmed.
 	// Not seeded on purpose either: "shutdownBatCrit" (was: #define SHUTDOWN_ON_BAT_CRITICAL). With it, a reading below the
 	// critical threshold sends the box to deep sleep during boot, before the web interface is up. As the voltage
 	// correction has to be re-calibrated after this update (see s_offsetVoltage), an uncalibrated reading could lock
@@ -255,7 +259,9 @@ void System_SetOperationMode(uint8_t opMode) {
 			Port_Write(GPIO_HP_EN, false, false);
 #endif
 
+#ifdef ES8388_ENABLE
 			es8388_2.power_down();
+#endif
 			ESP.restart();
 		}
 	}
@@ -322,7 +328,9 @@ void System_PreparePowerDown(void) {
 	Port_Write(GPIO_HP_EN, false, false);
 #endif
 
+#ifdef ES8388_ENABLE
 	es8388_2.power_down();
+#endif
 
 	Ftp_Exit();
 	Mqtt_Exit();

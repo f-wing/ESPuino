@@ -31,7 +31,12 @@
 #include <esp_task_wdt.h>
 #include <freertos/task.h>
 #include <random>
-#include "ES8388.h"
+#ifdef ES8388_ENABLE
+	#include "ES8388.h"
+#endif
+#if defined(MIC_DETECT) && !defined(ES8388_ENABLE)
+	#error "MIC_DETECT needs ES8388_ENABLE: the microphone is mixed in by the ES8388"
+#endif
 
 // Allocate gPlayProperties in PSRAM if available
 EXT_RAM_BSS_ATTR playProps gPlayProperties;
@@ -144,10 +149,11 @@ static uint32_t AudioPlayer_HeadphoneLastDetectionTimestamp = 0u;
 static uint8_t AudioPlayer_MaxVolumeHeadphone = 11u; // Maximum volume that can be adjusted in headphone-mode (default; can be changed later via GUI)
 #endif
 
-ES8388 es8388;
-
+#ifdef MIC_DETECT
+static ES8388 es8388;
 static bool AudioPlayer_MicrophoneLastDetectionState;
 static uint32_t AudioPlayer_MicrophoneLastDetectionTimestamp = 0u;
+#endif
 
 static bool AudioPlayer_IsHeadphoneModeActive() {
 #ifdef HEADPHONE_ADJUST_ENABLE
@@ -201,6 +207,10 @@ static bool gResetOldRfidOnIdle = false; // release the "don't accept same rfid 
 // [custom] No autoplay when a card is presented. A file is opened and paused right away; a webstream cannot be
 // paused before it runs, so it is not connected at all until play is pressed. True while it waits for that.
 static bool AudioPlayer_StartOnPlay = false;
+// [custom] No autoplay when a card is presented: set for a playlist that was started by a card on the reader
+// (see Rfid_PreferenceLookupHandler()), consumed when its first track is opened.
+static bool AudioPlayer_NewPlaylistStartsPaused = false; // handed over together with newPlayList
+static bool AudioPlayer_StartPaused = false; // for the playlist that is currently being started
 
 // Remember an RFID-tag whose webstream could not be started because WiFi is not (yet) connected, so it can
 // be re-injected into the RFID-queue once WiFi is up (see handleWifiStateConnectionSuccess() in Wlan.cpp).
@@ -221,7 +231,9 @@ void AudioPlayer_ArmRfidResetOnIdle(void) {
 }
 
 static void AudioPlayer_HeadphoneVolumeManager(void);
+#ifdef MIC_DETECT
 static void AudioPlayer_MicrophoneMixingManager(void);
+#endif
 static std::optional<Playlist *> AudioPlayer_ReturnPlaylistFromWebstream(const char *_webUrl);
 static bool AudioPlayer_ArrSortHelper_strcmp(const char *a, const char *b);
 static bool AudioPlayer_ArrSortHelper_strnatcmp(const char *a, const char *b);
@@ -547,10 +559,11 @@ void AudioPlayer_Init(void) {
 	}
 #endif
 
+#ifdef MIC_DETECT
 	// Initial setup of microphone detection
-#if (MIC_DETECT >= 0 && MIC_DETECT <= MAX_GPIO)
+	#if (MIC_DETECT >= 0 && MIC_DETECT <= MAX_GPIO)
 	pinMode(MIC_DETECT, INPUT_PULLUP);
-#endif
+	#endif
 
 	AudioPlayer_MicrophoneLastDetectionState = Port_Read(MIC_DETECT);
 	if (AudioPlayer_MicrophoneLastDetectionState == 1) { // mirophone connected
@@ -558,6 +571,7 @@ void AudioPlayer_Init(void) {
 	} else { // microphone missing
 		es8388.mixerSourceControl(DACOUT);
 	}
+#endif
 
 	// Adjust volume depending on headphone is connected and volume-adjustment is enabled
 	AudioPlayer_SetupVolumeAndAmps();
@@ -670,7 +684,9 @@ void AudioPlayer_Cyclic(void) {
 	}
 
 	AudioPlayer_HeadphoneVolumeManager();
+#ifdef MIC_DETECT
 	AudioPlayer_MicrophoneMixingManager();
+#endif
 	if ((millis() - lastPlayingTimestamp >= 1000) && gPlayProperties.playMode != NO_PLAYLIST && gPlayProperties.playMode != PLAYLIST_BUSY && !gPlayProperties.pausePlay) {
 		// audio is playing, update the playtime since start
 		lastPlayingTimestamp = millis();
@@ -967,6 +983,7 @@ void AudioPlayer_HeadphoneVolumeManager(void) {
 #endif
 }
 
+#ifdef MIC_DETECT
 void AudioPlayer_MicrophoneMixingManager(void) {
 	bool currentMicrophoneDetectionState = Port_Read(MIC_DETECT);
 	if (AudioPlayer_MicrophoneLastDetectionState != currentMicrophoneDetectionState && (millis() - AudioPlayer_MicrophoneLastDetectionTimestamp >= microphoneLastDetectionDebounce)) {
@@ -979,6 +996,7 @@ void AudioPlayer_MicrophoneMixingManager(void) {
 		AudioPlayer_MicrophoneLastDetectionTimestamp = millis();
 	}
 }
+#endif
 
 // Function to play music as task
 void AudioPlayer_Loop() {
@@ -1020,6 +1038,8 @@ void AudioPlayer_Loop() {
 		if (newPlayListAvailable) {
 			newPlayListAvailable = false;
 			AudioPlayer_StartOnPlay = false;
+			AudioPlayer_StartPaused = AudioPlayer_NewPlaylistStartsPaused;
+			AudioPlayer_NewPlaylistStartsPaused = false;
 			// A freshly tapped card supersedes a running announcement: there is no longer anything to
 			// return to, so drop it without restoring.
 			gPlayProperties.announcementActive = false;
@@ -1102,6 +1122,7 @@ void AudioPlayer_Loop() {
 				audio->stopSong();
 				trackCommand = NO_ACTION;
 				AudioPlayer_StartOnPlay = false;
+				AudioPlayer_StartPaused = false;
 				Log_Println(cmndStop, LOGLEVEL_INFO);
 				gPlayProperties.pausePlay = true;
 				gPlayProperties.playlistFinished = true;
@@ -1150,10 +1171,10 @@ void AudioPlayer_Loop() {
 			case PAUSE: // [custom] pause only: unlike PAUSEPLAY this never resumes (CMD_PAUSE)
 				trackCommand = NO_ACTION;
 				// Same as Audio::pause() of the patched pre-v3 audio library: it only ever stops the decoder.
-				if (audio->isRunning()) {
-					audio->pauseResume();
-				}
-				if (!gPlayProperties.pausePlay) {
+				// Nothing is changed while the decoder is not running (between tracks, while a stream is still
+				// connecting, or while waiting for play): marking that as paused would leave the next track
+				// playing while the state says "paused".
+				if (audio->isRunning() && audio->pauseResume() && !gPlayProperties.pausePlay) {
 					Log_Println(cmndPause, LOGLEVEL_INFO);
 #ifdef MQTT_ENABLE
 					publishMqtt(topicPausePlay, "pause", false);
@@ -1423,8 +1444,8 @@ void AudioPlayer_Loop() {
 
 		if (gPlayProperties.playMode == WEBSTREAM || (gPlayProperties.playMode == LOCAL_M3U && gPlayProperties.isWebstream)) { // Webstream
 			// [custom] disable autoplay when rfid is presented: don't connect yet, wait for play
-			if (NewRFIDPresented && !startOnPlayRequested) {
-				NewRFIDPresented = false;
+			if (AudioPlayer_StartPaused && !startOnPlayRequested) {
+				AudioPlayer_StartPaused = false;
 				AudioPlayer_StartOnPlay = true;
 				gPlayProperties.pausePlay = true;
 				gPlayProperties.playlistFinished = false;
@@ -1436,7 +1457,7 @@ void AudioPlayer_Loop() {
 				Web_SendWebsocketData(0, WebsocketCodeType::TrackInfo);
 				return;
 			}
-			NewRFIDPresented = false;
+			AudioPlayer_StartPaused = false;
 			audioReturnCode = audio->connecttohost(gPlayProperties.playlist->at(gPlayProperties.currentTrackNumber));
 			gPlayProperties.playlistFinished = false;
 		} else if (gPlayProperties.playMode != WEBSTREAM && !gPlayProperties.isWebstream) {
@@ -1463,8 +1484,8 @@ void AudioPlayer_Loop() {
 					= audio->connecttoFS(gFSystem, pathToTrack.c_str(), fileStartTime);
 				// consider track as finished, when audio lib call was not successful
 				// [custom] disable autoplay when rfid is presented: the track is loaded but stays paused until play is pressed
-				if (NewRFIDPresented && audioReturnCode) {
-					NewRFIDPresented = false;
+				if (AudioPlayer_StartPaused && audioReturnCode) {
+					AudioPlayer_StartPaused = false;
 					audio->pauseResume();
 					gPlayProperties.pausePlay = true;
 #ifdef MQTT_ENABLE
@@ -1725,6 +1746,11 @@ void AudioPlayer_PauseOnMinVolume(const uint8_t oldVolume, const uint8_t newVolu
 // Receives de-serialized RFID-data (from NVS) and dispatches playlists for the given
 // playmode to the track-queue.
 void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPos, const uint32_t _playMode, const uint16_t _trackLastPlayed) {
+	// [custom] Taken here in any case, so that it can never stick to a later playlist from elsewhere (web, MQTT, ...)
+	// if this one fails (e.g. an empty folder).
+	const bool startPaused = NewRFIDPresented;
+	NewRFIDPresented = false;
+
 	// Make sure last playposition for audiobook is saved when new RFID-tag is applied
 	if (gPlayProperties.SavePlayPosRfidChange && !gPlayProperties.pausePlay && (gPlayProperties.playMode == AUDIOBOOK || gPlayProperties.playMode == AUDIOBOOK_LOOP || gPlayProperties.playMode == AUDIOBOOK_RECURSIVE)) {
 		AudioPlayer_SetTrackControlNow(PAUSEPLAY);
@@ -1914,6 +1940,7 @@ void AudioPlayer_SetPlaylist(const char *_itemToPlay, const uint32_t _lastPlayPo
 
 	if (!error) {
 		gPlayProperties.playMode = _playMode;
+		AudioPlayer_NewPlaylistStartsPaused = startPaused;
 		newPlayListAvailable = true;
 		newPlayList = list;
 		return;

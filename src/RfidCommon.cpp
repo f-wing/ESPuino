@@ -35,6 +35,7 @@ bool Rfid_SaveAssignment(const char *cardId, const char *fileOrUrl, uint8_t play
 char gCurrentRfidTagId[cardIdStringSize] = ""; // No crap here as otherwise it could be shown in GUI
 
 extern bool NewRFIDPresented;
+std::atomic<bool> gRfidCardFromReader {false};
 
 char gOldRfidTagId[cardIdStringSize] = "X"; // Init with crap
 
@@ -50,6 +51,7 @@ void Rfid_PreferenceLookupHandler(void) {
 
 	rfidStatus = xQueueReceive(gRfidCardQueue, &rfidTagId, 0);
 	if (rfidStatus == pdPASS) {
+		const bool cardFromReader = gRfidCardFromReader.exchange(false); // [custom] consumed for every queue item
 		System_UpdateActivityTimer();
 		strncpy(gCurrentRfidTagId, rfidTagId, cardIdStringSize - 1);
 		Log_Printf(LOGLEVEL_INFO, "%s: %s", rfidTagReceived, gCurrentRfidTagId);
@@ -141,8 +143,9 @@ void Rfid_PreferenceLookupHandler(void) {
 					// a chance to interpret _file (concept: mediahub-konzept.md §8).
 					MediaHub_HandleCardTapped(gCurrentRfidTagId, _file, _lastPlayPos, _trackLastPlayed);
 				} else {
+					// [custom] disable autoplay when a card is put on the reader (taken over by AudioPlayer_SetPlaylist())
+					NewRFIDPresented = cardFromReader;
 					AudioPlayer_SetPlaylist(_file, _lastPlayPos, _playMode, _trackLastPlayed);
-					NewRFIDPresented = true;
 				}
 			}
 		}
